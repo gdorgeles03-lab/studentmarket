@@ -74,6 +74,10 @@ export default function Home() {
   const firstName = user?.user_metadata?.name?.split(" ")[0] || "Mon compte";
   const fullName = user?.user_metadata?.name || "";
 
+  // Route du dashboard determinee dynamiquement selon le role du user
+  // (permet d'accueillir plus tard le dashboard acheteur sans revenir ici)
+  const dashboardHref = user?.user_metadata?.role === "acheteur" ? "/dashboard/acheteur" : "/dashboard/vendeur";
+
   return (
     <main style={{ minHeight: "100vh", background: "#f5f5f5", fontFamily: "'Inter', system-ui, sans-serif", color: "#111827" }}>
 
@@ -183,7 +187,7 @@ export default function Home() {
                         <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{user?.email}</p>
                       </div>
                       {/* MENU ITEMS */}
-                      <a href="/dashboard" className="user-menu-item">
+                      <a href={dashboardHref} className="user-menu-item">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                         Mon dashboard
                       </a>

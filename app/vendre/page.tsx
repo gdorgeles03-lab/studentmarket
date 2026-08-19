@@ -38,13 +38,13 @@ const DUREE_MAP: Record<string, number> = {
 
 export default function VendrePage() {
   const [photos, setPhotos] = useState<string[]>([]);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [publication, setPublication] = useState(false);
   const [published, setPublished] = useState(false);
   const [form, setForm] = useState<FormDataType>(initialForm);
+  const [uploadProgress, setUploadProgress] = useState("");
 
-  // Ref pour révoquer toutes les object URLs créées, même celles déjà
-  // retirées de `photos` via removePhoto, au démontage du composant.
   const allObjectUrlsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -54,9 +54,6 @@ export default function VendrePage() {
     };
   }, []);
 
-  // Calcul du prix recommandé. Dépendances limitées aux champs sources
-  // (jamais prixVente) : aucune boucle possible, mais on évite aussi un
-  // setState inutile si le résultat calculé est identique à l'actuel.
   useEffect(() => {
     const achat = Number(form.prixAchat);
     const mois = DUREE_MAP[form.duree] || 0;
@@ -80,9 +77,7 @@ export default function VendrePage() {
     if (prix < achat * 0.45) score = "bas";
 
     setScoreResult((prev) => {
-      if (prev && prev.prix === prix && prev.min === min && prev.max === max && prev.score === score) {
-        return prev; // évite un re-render identique
-      }
+      if (prev && prev.prix === prix && prev.min === min && prev.max === max && prev.score === score) return prev;
       return { prix, min, max, score };
     });
 
@@ -94,50 +89,133 @@ export default function VendrePage() {
     setForm(prev => ({ ...prev, [name]: value }));
   }
 
-  function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
+  // ── UPLOAD PHOTO DANS SUPABASE STORAGE ────────────────────────
+  async function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     const remaining = 5 - photos.length;
-    const urls = files.slice(0, remaining).map(f => URL.createObjectURL(f));
-    urls.forEach((u) => allObjectUrlsRef.current.add(u));
-    setPhotos(prev => [...prev, ...urls]);
+    const filesToAdd = files.slice(0, remaining);
+
+    for (const file of filesToAdd) {
+      // Prévisualisation locale immédiate
+      const previewUrl = URL.createObjectURL(file);
+      allObjectUrlsRef.current.add(previewUrl);
+      setPhotos(prev => [...prev, previewUrl]);
+      setPhotoFiles(prev => [...prev, file]);
+    }
+
     e.target.value = "";
   }
 
   function removePhoto(index: number) {
     setPhotos(prev => {
       const url = prev[index];
-      URL.revokeObjectURL(url);
-      allObjectUrlsRef.current.delete(url);
+      if (url.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+        allObjectUrlsRef.current.delete(url);
+      }
       return prev.filter((_, i) => i !== index);
     });
+    setPhotoFiles(prev => prev.filter((_, i) => i !== index));
+  }
+
+  // ── UPLOAD VERS SUPABASE STORAGE ──────────────────────────────
+  async function uploadPhotos(): Promise<string[]> {
+    const urls: string[] = [];
+
+    for (let i = 0; i < photoFiles.length; i++) {
+      const file = photoFiles[i];
+      setUploadProgress(`Upload photo ${i + 1}/${photoFiles.length}...`);
+
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      const { data, error } = await supabase.storage
+        .from("Photos")
+        .upload(fileName, file, { cacheControl: "3600", upsert: false });
+
+      if (error) {
+        console.error("Erreur upload:", error.message);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("Photos")
+        .getPublicUrl(data.path);
+
+      urls.push(urlData.publicUrl);
+    }
+
+    setUploadProgress("");
+    return urls;
   }
 
   async function publierAnnonce() {
     if (!scoreResult || !form.titre || !form.categorie || !form.ville || !form.telephone) {
-      alert("Veuillez remplir tous les champs obligatoires."); return;
+      alert("Veuillez remplir tous les champs obligatoires.");
+      return;
     }
+
     try {
       setPublication(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("Vous devez être connecté pour publier une annonce.");
+        window.location.href = "/auth";
+        return;
+      }
+
+      // Upload les photos dans Supabase Storage
+      let photosUrls: string[] = [];
+      if (photoFiles.length > 0) {
+        photosUrls = await uploadPhotos();
+      }
+
       const { error } = await supabase.from("annonces").insert({
-        titre: form.titre, categorie: form.categorie, etat: form.etat,
-        prix_achat: Number(form.prixAchat), prix_vente: Number(form.prixVente),
-        duree_utilisation: Number(form.duree), description: form.description,
-        ville: form.ville, telephone: form.telephone,
+        titre: form.titre,
+        categorie: form.categorie,
+        etat: form.etat,
+        prix_achat: Number(form.prixAchat),
+        prix_vente: Number(form.prixVente),
+        duree_utilisation: Number(form.duree),
+        description: form.description,
+        ville: form.ville,
+        telephone: form.telephone,
         score_prix: scoreResult?.score || "bon",
-        vendeur_nom: "Etudiant", universite: "Ghana", photos,
+        vendeur_id: user.id,
+        vendeur_nom: user.user_metadata?.name || "Étudiant",
+        universite: user.user_metadata?.university || "Ghana",
+        statut: "actif",
+        vues: 0,
+        favoris: 0,
+        photos: photosUrls,
       });
-      if (error) { alert("Une erreur est survenue."); return; }
+
+      if (error) {
+        alert("Une erreur est survenue : " + error.message);
+        return;
+      }
+
       setPublished(true);
-    } catch { alert("Impossible de publier."); }
-    finally { setPublication(false); }
+    } catch {
+      alert("Impossible de publier. Vérifie ta connexion.");
+    } finally {
+      setPublication(false);
+      setUploadProgress("");
+    }
   }
 
   function resetForm() {
-    // Révoquer les URLs de la session terminée avant de repartir à zéro.
-    photos.forEach((p) => { URL.revokeObjectURL(p); allObjectUrlsRef.current.delete(p); });
+    photos.forEach((p) => {
+      if (p.startsWith("blob:")) {
+        URL.revokeObjectURL(p);
+        allObjectUrlsRef.current.delete(p);
+      }
+    });
     setPublished(false);
     setForm(initialForm);
     setPhotos([]);
+    setPhotoFiles([]);
     setScoreResult(null);
   }
 
@@ -200,10 +278,7 @@ export default function VendrePage() {
           <span style={{ color: "#fff" }}>Student</span><span style={{ color: "#86efac" }}>Market</span>
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          <a href="/" className="top-navlink" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-            Accueil
-          </a>
+          <a href="/" className="top-navlink">Accueil</a>
           <a href="/annonces" className="top-navlink">Annonces</a>
           <a href="/auth" className="login-pill">Se connecter</a>
         </div>
@@ -221,22 +296,15 @@ export default function VendrePage() {
         {/* LEFT COLUMN */}
         <div>
 
-          {/* SECTION 1 — Infos de base */}
+          {/* SECTION 1 */}
           <div className="section-block">
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
               <div className="section-num">1</div>
-              <div>
-                <h2 style={{ fontSize: "16px", fontWeight: 800, color: "#111827" }}>Informations de base</h2>
-              </div>
+              <h2 style={{ fontSize: "16px", fontWeight: 800, color: "#111827" }}>Informations de base</h2>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
               <div>
-                <label style={lbl}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8l-2 4h12z"/></svg>
-                    Categorie
-                  </span>
-                </label>
+                <label style={lbl}>Categorie</label>
                 <select name="categorie" value={form.categorie} onChange={handleChange} style={inp}>
                   <option value="">Choisir une categorie</option>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -244,7 +312,7 @@ export default function VendrePage() {
               </div>
               <div>
                 <label style={lbl}>Nom de l'appareil</label>
-                <input name="titre" value={form.titre} onChange={handleChange} placeholder="Ex: iPhone 13, HP Pavilion 15, etc." style={inp} />
+                <input name="titre" value={form.titre} onChange={handleChange} placeholder="Ex: iPhone 13, HP Pavilion 15..." style={inp} />
               </div>
             </div>
             <div>
@@ -268,11 +336,13 @@ export default function VendrePage() {
             {photos.length < 5 && (
               <label className="upload-zone" style={{ display: "block", marginBottom: "16px" }}>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" style={{ margin: "0 auto 12px", display: "block" }}>
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
                 <p style={{ fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Cliquez pour ajouter des photos</p>
                 <p style={{ fontSize: "12px", color: "#9ca3af" }}>ou glissez-deposez ici</p>
-                <p style={{ fontSize: "11px", color: "#d1d5db", marginTop: "6px" }}>Format accepte : JPG, PNG (max. 5MB)</p>
+                <p style={{ fontSize: "11px", color: "#d1d5db", marginTop: "6px" }}>Format : JPG, PNG (max. 5MB)</p>
                 <input type="file" accept="image/*" multiple onChange={handlePhoto} style={{ display: "none" }} />
               </label>
             )}
@@ -280,7 +350,7 @@ export default function VendrePage() {
             {photos.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "10px" }}>
                 {photos.map((p, i) => (
-                  <div key={p} className="photo-thumb">
+                  <div key={i} className="photo-thumb">
                     <img src={p} alt="" />
                     <button className="remove" onClick={() => removePhoto(i)}>×</button>
                   </div>
@@ -297,7 +367,7 @@ export default function VendrePage() {
             )}
           </div>
 
-          {/* SECTION 3 — Details et prix */}
+          {/* SECTION 3 */}
           <div className="section-block">
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
               <div className="section-num">3</div>
@@ -322,7 +392,7 @@ export default function VendrePage() {
             </div>
           </div>
 
-          {/* SECTION 4 — Infos supplementaires */}
+          {/* SECTION 4 */}
           <div className="section-block">
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
               <div className="section-num">4</div>
@@ -337,12 +407,7 @@ export default function VendrePage() {
                 </select>
               </div>
               <div>
-                <label style={lbl}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    Lieu
-                  </span>
-                </label>
+                <label style={lbl}>Lieu</label>
                 <select name="ville" value={form.ville} onChange={handleChange} style={inp}>
                   <option value="">Selectionner votre localisation</option>
                   {VILLES.map(v => <option key={v} value={v}>{v}</option>)}
@@ -354,21 +419,14 @@ export default function VendrePage() {
               </div>
             </div>
           </div>
-
         </div>
 
         {/* RIGHT COLUMN */}
         <div style={{ position: "sticky", top: "80px" }}>
 
-          {/* ESTIMATION CARD */}
+          {/* ESTIMATION */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "16px", padding: "24px", marginBottom: "14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#111827" }}>Estimation du prix</h3>
-              <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-              </div>
-            </div>
-
+            <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#111827", marginBottom: "16px" }}>Estimation du prix</h3>
             <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
               <p style={{ fontSize: "13px", color: "#15803d", fontWeight: 600, marginBottom: "4px" }}>
                 {scoreResult ? `GHS ${scoreResult.min.toLocaleString()} - ${scoreResult.max.toLocaleString()}` : "GHS 0 - 0"}
@@ -376,10 +434,9 @@ export default function VendrePage() {
               <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "12px" }}>
                 {scoreResult ? "Prix suggere pour votre appareil" : "Completez les informations pour obtenir une estimation"}
               </p>
-
               {scoreResult ? (
                 <>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                     <span style={{ fontSize: "11px", color: "#6b7280" }}>Niveau de prix</span>
                     <span style={{ fontSize: "11px", fontWeight: 700, color: scoreResult.score === "bon" ? "#15803d" : scoreResult.score === "eleve" ? "#d97706" : "#dc2626" }}>
                       {scoreResult.score === "bon" ? "Coherent" : scoreResult.score === "eleve" ? "Eleve" : "Bas"}
@@ -390,12 +447,9 @@ export default function VendrePage() {
                   </div>
                 </>
               ) : (
-                <div style={{ height: "6px", background: "#e5e7eb", borderRadius: "3px" }}>
-                  <div style={{ height: "100%", width: "0%", background: "#15803d", borderRadius: "3px" }} />
-                </div>
+                <div style={{ height: "6px", background: "#e5e7eb", borderRadius: "3px" }} />
               )}
             </div>
-
             {scoreResult && (
               <p style={{ fontSize: "12px", color: "#6b7280", textAlign: "center" }}>
                 Prix recommande : <strong style={{ color: "#15803d" }}>GHS {scoreResult.prix.toLocaleString()}</strong>
@@ -403,39 +457,50 @@ export default function VendrePage() {
             )}
           </div>
 
-          {/* TIPS CARD */}
+          {/* CONSEILS */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "16px", padding: "24px", marginBottom: "14px" }}>
             <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#111827", marginBottom: "16px" }}>Conseils pour bien vendre</h3>
             {[
-              { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>, text: "Prenez des photos claires sous plusieurs angles" },
-              { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>, text: "Soyez honnete sur l'etat de l'appareil" },
-              { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, text: "Fixez un prix juste et competitif" },
-              { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, text: "Repondez rapidement aux messages" },
+              "Prenez des photos claires sous plusieurs angles",
+              "Soyez honnete sur l'etat de l'appareil",
+              "Fixez un prix juste et competitif",
+              "Repondez rapidement aux messages",
             ].map((tip, i) => (
               <div key={i} className="tip-item">
-                <div className="tip-icon">{tip.icon}</div>
-                <p style={{ fontSize: "13px", color: "#374151", lineHeight: 1.5 }}>{tip.text}</p>
+                <div className="tip-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+                </div>
+                <p style={{ fontSize: "13px", color: "#374151", lineHeight: 1.5 }}>{tip}</p>
               </div>
             ))}
           </div>
 
-          {/* PUBLISH CARD */}
+          {/* PUBLIER */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "16px", padding: "24px" }}>
             <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#111827", marginBottom: "8px" }}>Publier votre annonce</h3>
             <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "16px" }}>
-              En publiant, vous acceptez nos{" "}
-              <a href="#" style={{ color: "#15803d", textDecoration: "none" }}>Conditions d'utilisation</a>.
+              En publiant, vous acceptez nos <a href="#" style={{ color: "#15803d", textDecoration: "none" }}>Conditions d'utilisation</a>.
             </p>
-            <button className="publish-btn" onClick={publierAnnonce} disabled={publication || !form.titre || !form.categorie}>
-              {publication ? (
-                "Publication en cours..."
-              ) : (
+
+            {uploadProgress && (
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px", fontSize: "13px", color: "#15803d", fontWeight: 600 }}>
+                {uploadProgress}
+              </div>
+            )}
+
+            <button
+              className="publish-btn"
+              onClick={publierAnnonce}
+              disabled={publication || !form.titre || !form.categorie}
+            >
+              {publication ? "Publication en cours..." : (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                   Publier maintenant
                 </>
               )}
             </button>
+
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "14px", background: "#f0fdf4", borderRadius: "10px", padding: "12px 14px", border: "1px solid #bbf7d0" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               <div>

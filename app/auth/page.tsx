@@ -1,178 +1,727 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 
-export default function AuthCallbackPage() {
+type FormState = {
+  name: string;
+  email: string;
+  university: string;
+  password: string;
+  role: "vendeur" | "acheteur" | "";
+};
+
+export default function AuthPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-  const [email, setEmail] = useState("");
+  const [mode, setMode] = useState<"register" | "login">("register");
+  const [step, setStep] = useState(1);
+  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState<FormState>({
+    name: "",
+    email: "",
+    university: "",
+    password: "",
+    role: "",
+  });
+  const [emailSent, setEmailSent] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [awaitingCode, setAwaitingCode] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState("");
+
+  const universities = [
+    "KNUST - Kumasi",
+    "University of Ghana - Legon",
+    "Ashesi University",
+    "GIMPA - Accra",
+    "University of Cape Coast",
+    "GCTU",
+    "Chenan Africa",
+    "Autre universite",
+  ];
 
   useEffect(() => {
     let mounted = true;
-
-    async function handleCallback() {
-      // detectSessionInUrl (activé dans lib/supabase.ts) traite automatiquement
-      // le fragment #access_token=...&refresh_token=... au chargement du client.
-      // getSession() peut nécessiter un court délai pour refléter ce traitement
-      // initial — on tente quelques fois avant de conclure à une erreur.
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const { data, error } = await supabase.auth.getSession();
-        if (!mounted) return;
-
-        if (error) {
-          setStatus("error");
-          return;
+    async function redirectIfAlreadyLoggedIn() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (session) {
+        const role = session.user.user_metadata?.role;
+        if (role === "acheteur") {
+          router.replace("/dashboard/acheteur");
+        } else {
+          router.replace("/dashboard/vendeur");
         }
-
-        if (data.session) {
-          setEmail(data.session.user.email || "");
-          setStatus("success");
-          return;
-        }
-
-        // Pas encore de session : attendre un court instant que le SDK
-        // termine le traitement du hash, puis réessayer.
-        await new Promise((r) => setTimeout(r, 300));
+        return;
       }
+      setCheckingSession(false);
+    }
+    redirectIfAlreadyLoggedIn();
+    return () => { mounted = false; };
+  }, [router]);
 
-      if (mounted) setStatus("error");
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    setForm((current) => ({ ...current, [e.target.name]: e.target.value }));
+  }
+
+  function getPasswordCriteria() {
+    const password = form.password;
+    return [
+      { label: "8 caracteres minimum", ok: password.length >= 8 },
+      { label: "Une lettre majuscule", ok: /[A-Z]/.test(password) },
+      { label: "Une lettre minuscule", ok: /[a-z]/.test(password) },
+      { label: "Un chiffre", ok: /[0-9]/.test(password) },
+      { label: "Un caractere special", ok: /[^A-Za-z0-9]/.test(password) },
+    ];
+  }
+
+  function getPasswordScore() {
+    return getPasswordCriteria().filter((c) => c.ok).length;
+  }
+
+  async function handleVerifyCode() {
+    if (!confirmationCode.trim()) {
+      alert("Entre le code reçu par email.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { data: { session }, error } = await supabase.auth.verifyOtp({
+        email: form.email,
+        token: confirmationCode.trim(),
+        type: "email",
+      });
+      if (error) {
+        alert("Code invalide ou expiré. Vérifie ton email.");
+        return;
+      }
+      if (!session) {
+        alert("Session non créée. Demande un nouveau code.");
+        return;
+      }
+      const role = session.user.user_metadata?.role;
+      if (role === "acheteur") {
+        router.replace("/dashboard/acheteur");
+      } else {
+        router.replace("/dashboard/vendeur");
+      }
+    } catch {
+      alert("Impossible de vérifier le code. Vérifie ta connexion.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (submitting) return;
+
+    if (mode === "register" && step === 1) {
+      if (!form.name || !form.email || !form.password) {
+        alert("Veuillez remplir tous les champs.");
+        return;
+      }
+      if (getPasswordScore() < 2) {
+        alert("Veuillez choisir un mot de passe plus securise.");
+        return;
+      }
+      setStep(2);
+      return;
     }
 
-    handleCallback();
-    return () => { mounted = false; };
-  }, []);
+    if (mode === "register" && step === 2) {
+      if (!form.university) {
+        alert("Veuillez selectionner votre universite.");
+        return;
+      }
+      setStep(3);
+      return;
+    }
 
-  if (status === "loading") {
+    if (mode === "register" && step === 3) {
+      if (!form.role) {
+        alert("Veuillez choisir votre rôle.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const { error } = await supabase.auth.signUp({
+          email: form.email,
+          password: form.password,
+          options: {
+            data: {
+              name: form.name,
+              university: form.university,
+              role: form.role,
+            },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (error) {
+          if (
+            error.message.includes("already registered") ||
+            error.message.includes("already been registered") ||
+            error.message.includes("User already registered")
+          ) {
+            alert("Email déjà utilisé. Connectez-vous.");
+          } else {
+            alert(error.message);
+          }
+          return;
+        }
+        setAwaitingCode(true);
+      } catch {
+        alert("Impossible de contacter Supabase. Vérifie ta connexion.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (mode === "login") {
+      if (!form.email || !form.password) {
+        alert("Veuillez remplir tous les champs.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: form.email,
+          password: form.password,
+        });
+        if (error || !data.session) {
+          alert("Email ou mot de passe incorrect, ou compte non confirmé.");
+          return;
+        }
+        const role = data.session.user.user_metadata?.role;
+        if (role === "acheteur") {
+          router.replace("/dashboard/acheteur");
+        } else {
+          router.replace("/dashboard/vendeur");
+        }
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  }
+
+  async function handleResendEmail() {
+    if (!form.email || submitting) return;
+    setResendSuccess(false);
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: form.email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        alert("Erreur lors du renvoi. Veuillez reessayer.");
+        return;
+      }
+      setResendSuccess(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ÉCRAN — Vérification de session
+  if (checkingSession) {
     return (
-      <main style={{ minHeight: "100vh", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: "48px", height: "48px", border: "3px solid #e5e7eb", borderTop: "3px solid #15803d", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
-          <p style={{ fontSize: "14px", color: "#6b7280" }}>Verification en cours...</p>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
+      <main style={styles.centeredPage}>
+        <p style={styles.mutedText}>Verification de la session...</p>
       </main>
     );
   }
 
-  if (status === "error") {
+  // ÉCRAN — Saisie du code OTP
+  if (awaitingCode) {
     return (
-      <main style={{ minHeight: "100vh", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: "16px" }}>
-        <div style={{ background: "#fff", borderRadius: "20px", padding: "48px 40px", maxWidth: "480px", width: "100%", textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" }}>
-          <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#fef2f2", border: "2px solid #fca5a5", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      <main style={styles.centeredPage}>
+        <section style={styles.card}>
+          <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: "1px solid #e5e7eb" }}>
+            <p style={{ fontSize: "12px", fontWeight: 600, color: "#15803d", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "8px" }}>
+              Vérification email
+            </p>
+            <h2 style={styles.title}>Entrez votre code</h2>
+            <p style={styles.mutedText}>
+              Un code à 8 chiffres a été envoyé à{" "}
+              <strong style={{ color: "#111827" }}>{form.email}</strong>.
+              Vérifiez aussi vos spams.
+            </p>
           </div>
-          <h2 style={{ fontSize: "22px", fontWeight: 800, color: "#111827", marginBottom: "10px" }}>Lien invalide ou expire</h2>
-          <p style={{ fontSize: "14px", color: "#6b7280", lineHeight: 1.7, marginBottom: "28px" }}>
-            Ce lien de confirmation n est plus valide. Veuillez vous inscrire a nouveau ou demander un nouveau lien.
-          </p>
-          <a href="/auth" style={{ display: "block", background: "#15803d", color: "#fff", fontWeight: 700, padding: "13px", borderRadius: "10px", textDecoration: "none", fontSize: "14px" }}>
-            Retourner a l inscription
-          </a>
-        </div>
+
+          <label style={styles.label}>
+            Code de confirmation
+            <input
+              type="text"
+              maxLength={8}
+              value={confirmationCode}
+              onChange={(e) => setConfirmationCode(e.target.value.replace(/\D/g, ""))}
+              placeholder="00000000"
+              style={{
+                border: "1.5px solid #e5e7eb",
+                borderRadius: "10px",
+                padding: "14px 16px",
+                fontSize: "24px",
+                fontWeight: 700,
+                letterSpacing: "10px",
+                textAlign: "center",
+                outline: "none",
+                fontFamily: "inherit",
+                color: "#111827",
+                width: "100%",
+              }}
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={handleVerifyCode}
+            disabled={submitting || confirmationCode.length < 8}
+            style={{
+              ...styles.primaryButton,
+              marginTop: "16px",
+              opacity: submitting || confirmationCode.length < 8 ? 0.6 : 1,
+              cursor: submitting || confirmationCode.length < 8 ? "not-allowed" : "pointer",
+            }}
+          >
+            {submitting ? "Vérification en cours..." : "Confirmer et accéder au Dashboard"}
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              setConfirmationCode("");
+              await supabase.auth.resend({ type: "signup", email: form.email });
+              alert("Nouveau code envoyé. Vérifiez votre email.");
+            }}
+            style={{ ...styles.secondaryButton, marginTop: "10px" }}
+          >
+            Renvoyer le code
+          </button>
+        </section>
       </main>
     );
   }
 
+  // ÉCRAN — Email envoyé
+  if (emailSent) {
+    return (
+      <main style={styles.centeredPage}>
+        <section style={styles.card}>
+          <h1 style={styles.title}>Verifie ton email</h1>
+          <p style={styles.mutedText}>Un lien de confirmation a ete envoye a :</p>
+          <p style={styles.highlightText}>{form.email}</p>
+          {resendSuccess && (
+            <p style={styles.successText}>Un nouvel email a ete envoye avec succes.</p>
+          )}
+          <a href="/" style={styles.primaryLink}>Aller a l accueil</a>
+          <button
+            type="button"
+            onClick={handleResendEmail}
+            disabled={submitting}
+            style={styles.secondaryButton}
+          >
+            Renvoyer l email de confirmation
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  const criteria = getPasswordCriteria();
+
+  // ÉCRAN — Formulaire principal
   return (
-    <main style={{ minHeight: "100vh", background: "#f9fafb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: "16px" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-        .anim-scale { animation: scaleIn 0.5s ease forwards; }
-        .anim-1 { animation: fadeUp 0.5s ease 0.1s forwards; opacity: 0; }
-        .anim-2 { animation: fadeUp 0.5s ease 0.2s forwards; opacity: 0; }
-        .anim-3 { animation: fadeUp 0.5s ease 0.3s forwards; opacity: 0; }
-        .anim-4 { animation: fadeUp 0.5s ease 0.4s forwards; opacity: 0; }
-        .cta-primary { display: block; background: #15803d; color: #fff; font-weight: 800; padding: 14px; border-radius: 10px; text-decoration: none; font-size: 15px; transition: background 0.2s; text-align: center; }
-        .cta-primary:hover { background: #166534; }
-      `}</style>
-
-      {/* LOGO */}
-      <div className="anim-1" style={{ marginBottom: "32px", textAlign: "center" }}>
-        <a href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ width: "40px", height: "40px", background: "#15803d", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-          </div>
-          <span style={{ fontWeight: 900, fontSize: "20px" }}>
-            <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
-          </span>
-        </a>
-      </div>
-
-      {/* CARD */}
-      <div style={{ background: "#fff", borderRadius: "24px", padding: "48px 40px", maxWidth: "500px", width: "100%", textAlign: "center", boxShadow: "0 8px 40px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" }}>
-
-        {/* SUCCESS ICON */}
-        <div className="anim-scale" style={{ marginBottom: "24px" }}>
-          <div style={{ width: "80px", height: "80px", borderRadius: "50%", background: "linear-gradient(135deg, #f0fdf4, #dcfce7)", border: "3px solid #86efac", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", position: "relative" }}>
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6L9 17l-5-5"/>
-            </svg>
-            <div style={{ position: "absolute", top: "-4px", right: "-4px", width: "24px", height: "24px", background: "#15803d", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
-            </div>
-          </div>
+    <main style={styles.page}>
+      <section style={styles.authPanel}>
+        <div style={styles.tabs}>
+          <button
+            type="button"
+            onClick={() => { setMode("register"); setStep(1); }}
+            style={mode === "register" ? styles.activeTab : styles.tab}
+          >
+            Creer un compte
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode("login"); setStep(1); }}
+            style={mode === "login" ? styles.activeTab : styles.tab}
+          >
+            Se connecter
+          </button>
         </div>
 
-        <h1 className="anim-1" style={{ fontSize: "24px", fontWeight: 900, color: "#111827", marginBottom: "8px", letterSpacing: "-0.5px" }}>
-          Email confirme avec succes !
+        <h1 style={styles.title}>
+          {mode === "register" ? `Inscription - etape ${step}/3` : "Connexion"}
         </h1>
 
-        <p className="anim-2" style={{ fontSize: "14px", color: "#6b7280", lineHeight: 1.7, marginBottom: "6px" }}>
-          Votre adresse e-mail a ete verifiee
-        </p>
+        <div style={styles.form}>
 
-        {email && (
-          <div className="anim-2" style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "20px", padding: "6px 14px", marginBottom: "24px" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "#15803d" }}>{email}</span>
-          </div>
-        )}
+          {/* ÉTAPE 1 — Infos personnelles */}
+          {mode === "register" && step === 1 && (
+            <>
+              <label style={styles.label}>
+                Nom complet
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Ex: Kofi Mensah"
+                  style={styles.input}
+                />
+              </label>
+              <label style={styles.label}>
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="exemple@ug.edu.gh"
+                  style={styles.input}
+                />
+              </label>
+              <label style={styles.label}>
+                Mot de passe
+                <div style={styles.passwordRow}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="Minimum 8 caracteres"
+                    style={styles.passwordInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    style={styles.smallButton}
+                  >
+                    {showPassword ? "Masquer" : "Voir"}
+                  </button>
+                </div>
+              </label>
+              {form.password && (
+                <div style={styles.criteriaList}>
+                  {criteria.map((c) => (
+                    <span key={c.label} style={c.ok ? styles.validCriterion : styles.invalidCriterion}>
+                      {c.ok ? "OK" : "--"} {c.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
-        {/* SECURITY BADGE */}
-        <div className="anim-3" style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "14px", padding: "16px 20px", marginBottom: "24px", display: "flex", gap: "12px", alignItems: "center", textAlign: "left" }}>
-          <div style={{ width: "36px", height: "36px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          </div>
-          <div>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#111827", margin: "0 0 2px" }}>Compte securise et verifie</p>
-            <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>Votre identite etudiante a ete confirmee. Vous pouvez maintenant acceder a toutes les fonctionnalites.</p>
-          </div>
-        </div>
+          {/* ÉTAPE 2 — Université */}
+          {mode === "register" && step === 2 && (
+            <label style={styles.label}>
+              Ton universite
+              <select
+                name="university"
+                value={form.university}
+                onChange={handleChange}
+                style={styles.input}
+              >
+                <option value="">Selectionne ton universite</option>
+                {universities.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
-        {/* FEATURES */}
-        <div className="anim-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "28px" }}>
-          {[
-            { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: "Publier des annonces" },
-            { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, label: "Contacter les vendeurs" },
-            { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>, label: "Paiement via MoMo" },
-            { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>, label: "Profil verifie" },
-          ].map(f => (
-            <div key={f.label} style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f9fafb", borderRadius: "10px", padding: "10px 12px", border: "1px solid #f3f4f6" }}>
-              <div style={{ width: "26px", height: "26px", background: "#f0fdf4", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{f.icon}</div>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151" }}>{f.label}</span>
+          {/* ÉTAPE 3 — Choix du rôle */}
+          {mode === "register" && step === 3 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "4px" }}>
+                Vous pourrez changer de rôle à tout moment depuis votre profil.
+              </p>
+              {[
+                {
+                  value: "vendeur",
+                  titre: "Je suis vendeur",
+                  desc: "Je veux publier des annonces et vendre mes appareils.",
+                },
+                {
+                  value: "acheteur",
+                  titre: "Je suis acheteur",
+                  desc: "Je veux parcourir les annonces et acheter des appareils.",
+                },
+              ].map((option) => (
+                <div
+                  key={option.value}
+                  onClick={() => setForm((f) => ({ ...f, role: option.value as "vendeur" | "acheteur" }))}
+                  style={{
+                    border: `1.5px solid ${form.role === option.value ? "#15803d" : "#e5e7eb"}`,
+                    borderRadius: "12px",
+                    padding: "16px",
+                    cursor: "pointer",
+                    background: form.role === option.value ? "#f0fdf4" : "#fff",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <p style={{ fontSize: "14px", fontWeight: 700, color: form.role === option.value ? "#15803d" : "#111827", marginBottom: "4px" }}>
+                    {option.titre}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "#6b7280", margin: 0 }}>
+                    {option.desc}
+                  </p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
 
-        {/* CTA */}
-        <div className="anim-4" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <a href="/dashboard" className="cta-primary">
-            Acceder a StudentMarket
-          </a>
-          <a href="/vendre" style={{ display: "block", background: "#f0fdf4", color: "#15803d", fontWeight: 700, padding: "13px", borderRadius: "10px", textDecoration: "none", fontSize: "14px", border: "1.5px solid #bbf7d0" }}>
-            Publier ma premiere annonce
-          </a>
-        </div>
-      </div>
+          {/* CONNEXION */}
+          {mode === "login" && (
+            <>
+              <label style={styles.label}>
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="ton.email@ug.edu.gh"
+                  style={styles.input}
+                />
+              </label>
+              <label style={styles.label}>
+                Mot de passe
+                <div style={styles.passwordRow}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="Votre mot de passe"
+                    style={styles.passwordInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    style={styles.smallButton}
+                  >
+                    {showPassword ? "Masquer" : "Voir"}
+                  </button>
+                </div>
+              </label>
+            </>
+          )}
 
-      {/* FOOTER */}
-      <p className="anim-4" style={{ marginTop: "24px", fontSize: "12px", color: "#9ca3af" }}>
-        StudentMarket Ghana · <a href="mailto:support@studentmarket.gh" style={{ color: "#15803d", textDecoration: "none" }}>support@studentmarket.gh</a>
-      </p>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+            style={styles.primaryButton}
+          >
+            {submitting
+              ? "Veuillez patienter..."
+              : mode === "register" && step === 1
+              ? "Continuer"
+              : mode === "register" && step === 2
+              ? "Continuer"
+              : mode === "register" && step === 3
+              ? "Creer mon compte"
+              : "Se connecter"}
+          </button>
+
+          {mode === "register" && step > 1 && (
+            <button
+              type="button"
+              onClick={() => setStep(step - 1)}
+              disabled={submitting}
+              style={styles.secondaryButton}
+            >
+              Retour
+            </button>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f9fafb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+    fontFamily: "Inter, system-ui, sans-serif",
+  },
+  centeredPage: {
+    minHeight: "100vh",
+    background: "#f9fafb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+    fontFamily: "Inter, system-ui, sans-serif",
+  },
+  authPanel: {
+    width: "100%",
+    maxWidth: "480px",
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: "16px",
+    padding: "28px",
+    boxShadow: "0 10px 32px rgba(0,0,0,0.06)",
+  },
+  card: {
+    width: "100%",
+    maxWidth: "460px",
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: "16px",
+    padding: "32px",
+    textAlign: "center",
+    boxShadow: "0 10px 32px rgba(0,0,0,0.06)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  tabs: {
+    display: "flex",
+    gap: "6px",
+    background: "#f3f4f6",
+    padding: "4px",
+    borderRadius: "12px",
+    marginBottom: "20px",
+  },
+  tab: {
+    flex: 1,
+    border: 0,
+    background: "transparent",
+    borderRadius: "9px",
+    padding: "10px",
+    cursor: "pointer",
+    color: "#6b7280",
+    fontWeight: 700,
+  },
+  activeTab: {
+    flex: 1,
+    border: 0,
+    background: "#fff",
+    borderRadius: "9px",
+    padding: "10px",
+    cursor: "pointer",
+    color: "#15803d",
+    fontWeight: 800,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+  },
+  title: {
+    fontSize: "22px",
+    fontWeight: 900,
+    color: "#111827",
+    margin: "0 0 18px",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "14px",
+  },
+  label: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    fontSize: "13px",
+    color: "#374151",
+    fontWeight: 700,
+  },
+  input: {
+    border: "1.5px solid #e5e7eb",
+    borderRadius: "10px",
+    padding: "12px 13px",
+    fontSize: "14px",
+    fontFamily: "inherit",
+  },
+  passwordRow: {
+    display: "flex",
+    gap: "8px",
+  },
+  passwordInput: {
+    flex: 1,
+    border: "1.5px solid #e5e7eb",
+    borderRadius: "10px",
+    padding: "12px 13px",
+    fontSize: "14px",
+    fontFamily: "inherit",
+  },
+  primaryButton: {
+    border: 0,
+    borderRadius: "10px",
+    background: "#15803d",
+    color: "#fff",
+    padding: "13px",
+    fontSize: "14px",
+    fontWeight: 800,
+    cursor: "pointer",
+    width: "100%",
+  },
+  secondaryButton: {
+    border: "1.5px solid #e5e7eb",
+    borderRadius: "10px",
+    background: "#fff",
+    color: "#374151",
+    padding: "12px",
+    fontSize: "14px",
+    fontWeight: 700,
+    cursor: "pointer",
+    width: "100%",
+  },
+  smallButton: {
+    border: "1.5px solid #e5e7eb",
+    borderRadius: "10px",
+    background: "#fff",
+    color: "#374151",
+    padding: "0 12px",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  criteriaList: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "6px",
+    fontSize: "12px",
+  },
+  validCriterion: { color: "#15803d" },
+  invalidCriterion: { color: "#9ca3af" },
+  mutedText: {
+    color: "#6b7280",
+    fontSize: "14px",
+    lineHeight: 1.6,
+  },
+  highlightText: {
+    color: "#15803d",
+    fontWeight: 800,
+    fontSize: "14px",
+  },
+  successText: {
+    color: "#15803d",
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
+    borderRadius: "10px",
+    padding: "10px",
+    fontSize: "13px",
+    fontWeight: 700,
+  },
+  primaryLink: {
+    display: "block",
+    borderRadius: "10px",
+    background: "#15803d",
+    color: "#fff",
+    padding: "13px",
+    fontSize: "14px",
+    fontWeight: 800,
+    textDecoration: "none",
+    margin: "8px 0",
+  },
+};
