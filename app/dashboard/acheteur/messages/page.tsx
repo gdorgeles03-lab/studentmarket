@@ -5,8 +5,8 @@ import { supabase } from "@/lib/supabase";
 
 type Conversation = {
   commande_id: string;
-  acheteur_id: string;
-  acheteur_nom: string;
+  vendeur_id: string;
+  vendeur_nom: string;
   annonce_titre: string;
   dernier_message?: string;
   non_lus: number;
@@ -22,7 +22,7 @@ type Message = {
   created_at: string;
 };
 
-export default function MessagesVendeurPage() {
+export default function MessagesAcheteurPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -39,17 +39,15 @@ export default function MessagesVendeurPage() {
       if (!session) { router.replace("/auth"); return; }
       setUserId(session.user.id);
 
-      // Charger les commandes confirmées du vendeur
       const { data: commandes } = await supabase
         .from("commandes")
-        .select("id, acheteur_id, acheteur_nom, annonces(titre)")
-        .eq("vendeur_id", session.user.id)
+        .select("id, vendeur_id, annonces(titre, vendeur_nom)")
+        .eq("acheteur_id", session.user.id)
         .eq("statut", "confirmee")
         .order("created_at", { ascending: false });
 
       if (!commandes) { setLoading(false); return; }
 
-      // Pour chaque commande, récupérer le dernier message
       const convs: Conversation[] = await Promise.all(
         commandes.map(async (c: any) => {
           const { data: msgs } = await supabase
@@ -68,8 +66,8 @@ export default function MessagesVendeurPage() {
 
           return {
             commande_id: c.id,
-            acheteur_id: c.acheteur_id,
-            acheteur_nom: c.acheteur_nom || "Acheteur",
+            vendeur_id: c.vendeur_id,
+            vendeur_nom: (c.annonces as any)?.vendeur_nom || "Vendeur",
             annonce_titre: (c.annonces as any)?.titre || "Annonce",
             dernier_message: msgs?.[0]?.contenu,
             non_lus: count || 0,
@@ -95,7 +93,6 @@ export default function MessagesVendeurPage() {
 
       if (data) setMessages(data);
 
-      // Marquer comme lus
       await supabase
         .from("messages")
         .update({ lu: true })
@@ -105,7 +102,6 @@ export default function MessagesVendeurPage() {
 
     chargerMessages();
 
-    // Realtime — écouter les nouveaux messages
     const channel = supabase
       .channel(`messages:${convActive.commande_id}`)
       .on("postgres_changes", {
@@ -133,14 +129,13 @@ export default function MessagesVendeurPage() {
     const { error } = await supabase.from("messages").insert({
       commande_id: convActive.commande_id,
       expediteur_id: userId,
-      destinataire_id: convActive.acheteur_id,
+      destinataire_id: convActive.vendeur_id,
       contenu: contenu.trim(),
       lu: false,
     });
 
     if (!error) {
       setContenu("");
-      // Mettre à jour le dernier message dans la liste
       setConversations(prev =>
         prev.map(c => c.commande_id === convActive.commande_id
           ? { ...c, dernier_message: contenu.trim() }
@@ -178,7 +173,7 @@ export default function MessagesVendeurPage() {
           ← Retour
         </button>
         <h1 style={{ fontSize: 18, fontWeight: 800, color: "#111827" }}>Messages</h1>
-        <span style={{ fontSize: 13, color: "#9ca3af" }}>— conversations avec vos acheteurs</span>
+        <span style={{ fontSize: 13, color: "#9ca3af" }}>— conversations avec vos vendeurs</span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", height: "calc(100vh - 65px)" }}>
@@ -201,7 +196,7 @@ export default function MessagesVendeurPage() {
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               </div>
               <p style={{ fontSize: 13, color: "#6b7280", fontWeight: 600, marginBottom: 4 }}>Aucune conversation</p>
-              <p style={{ fontSize: 12, color: "#9ca3af" }}>Les messages arrivent quand un acheteur vous contacte.</p>
+              <p style={{ fontSize: 12, color: "#9ca3af" }}>Les conversations s'ouvrent après confirmation d'une commande.</p>
             </div>
           ) : (
             conversations.map(conv => (
@@ -211,11 +206,11 @@ export default function MessagesVendeurPage() {
                 onClick={() => setConvActive(conv)}
               >
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                  {initiales(conv.acheteur_nom)}
+                  {initiales(conv.vendeur_nom)}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{conv.acheteur_nom}</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{conv.vendeur_nom}</p>
                     {conv.non_lus > 0 && (
                       <span style={{ background: "#15803d", color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 20 }}>
                         {conv.non_lus}
@@ -251,10 +246,10 @@ export default function MessagesVendeurPage() {
             {/* Header chat */}
             <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700 }}>
-                {initiales(convActive.acheteur_nom)}
+                {initiales(convActive.vendeur_nom)}
               </div>
               <div>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{convActive.acheteur_nom}</p>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{convActive.vendeur_nom}</p>
                 <p style={{ fontSize: 12, color: "#9ca3af" }}>Re: {convActive.annonce_titre}</p>
               </div>
               <div style={{ marginLeft: "auto", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "4px 12px" }}>
@@ -266,7 +261,7 @@ export default function MessagesVendeurPage() {
             <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 12 }}>
               {messages.length === 0 && (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
-                  <p style={{ fontSize: 13, color: "#9ca3af" }}>Démarrez la conversation avec {convActive.acheteur_nom}.</p>
+                  <p style={{ fontSize: 13, color: "#9ca3af" }}>Démarrez la conversation avec {convActive.vendeur_nom}.</p>
                 </div>
               )}
               {messages.map(m => (
@@ -293,7 +288,7 @@ export default function MessagesVendeurPage() {
                 value={contenu}
                 onChange={e => setContenu(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
-                placeholder={`Écrire à ${convActive.acheteur_nom}...`}
+                placeholder={`Écrire à ${convActive.vendeur_nom}...`}
                 style={{ flex: 1, border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: 14, fontFamily: "inherit", color: "#111827", background: "#f9fafb" }}
               />
               <button

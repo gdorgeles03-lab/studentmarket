@@ -400,24 +400,22 @@ export default function DashboardAcheteur() {
 
           {/* ── MESSAGES ── */}
           {activeNav === "Messages" && (
-  <div>
-    <div style={{ marginBottom: 24 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Messages</h1>
-      <p style={{ fontSize: 14, color: "#9ca3af" }}>Vos conversations avec les vendeurs.</p>
-    </div>
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "60px 24px", textAlign: "center" }}>
-      <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 16 }}>
-        Vos conversations actives apparaissent ici après confirmation d'une commande.
-      </p>
-      <button
-        onClick={() => router.push("/dashboard/acheteur/messages")}
-        style={{ background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-      >
-        Ouvrir la messagerie
-      </button>
-    </div>
-  </div>
-)}
+            <div>
+              <div style={{ marginBottom: 24 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Messages</h1>
+                <p style={{ fontSize: 14, color: "#9ca3af" }}>Vos conversations avec les vendeurs.</p>
+              </div>
+              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "60px 24px", textAlign: "center" }}>
+                <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Messagerie bientôt disponible</p>
+                <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>
+                  Une fois votre commande confirmée, vous pourrez échanger directement avec le vendeur via WhatsApp depuis l'onglet "Mes commandes".
+                </p>
+                <button onClick={() => setActiveNav("Mes commandes")} className="btn-primary">
+                  Voir mes commandes
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ── PARAMÈTRES ── */}
           {activeNav === "Parametres" && (
