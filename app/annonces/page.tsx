@@ -51,7 +51,11 @@ export default function AnnoncesPage() {
   const [categorie, setCategorie] = useState("Tous");
   const [chargement, setChargement] = useState(true);
   const [selected, setSelected] = useState<Annonce | null>(null);
-  const [favoris, setFavoris] = useState<Set<string>>(new Set());
+  const [favoris, setFavoris] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    const saved = localStorage.getItem("studentmarket_favoris");
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+    });
   const [photoActive, setPhotoActive] = useState(0);
   const [tri, setTri] = useState("recentes");
 
@@ -113,20 +117,31 @@ export default function AnnoncesPage() {
     return trie;
   }, [annonces, categorie, recherche, tri]);
 
-  function toggleFavori(id: string, e: React.MouseEvent) {
+  async function toggleFavori(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    setFavoris(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
+    const isFavori = favoris.has(id);
 
-  function ouvrirAnnonce(annonce: Annonce) {
+    const next = new Set(favoris);
+    if (isFavori) {
+      next.delete(id);
+      await supabase.rpc("decrementer_favoris", { p_annonce_id: id });
+    } else {
+      next.add(id);
+      await supabase.rpc("incrementer_favoris", { p_annonce_id: id });
+    }
+      localStorage.setItem("studentmarket_favoris", JSON.stringify([...next]));
+      setFavoris(next);
+    }
+
+  async function ouvrirAnnonce(annonce: Annonce) {
     setSelected(annonce);
-    setCommandeConfirmee(false);
-    setErreurCommande("");
-    setPhotoActive(0);
+    try {
+      const { data, error } = await supabase.rpc("incrementer_vues", { p_annonce_id: annonce.id });
+      if (error) console.error("Erreur vue:", error);
+      else console.log("Vue enregistrée:", data);
+    } catch (e) {
+      console.error("Exception:", e);
+    }
   }
 
   // ── Creation de la commande ──────────────────────────────────

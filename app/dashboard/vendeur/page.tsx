@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
@@ -9,6 +9,7 @@ type Annonce = {
   titre: string;
   categorie: string;
   ville: string;
+  etat?: string;
   prix_vente?: number;
   prix_achat?: number;
   score_prix?: string;
@@ -17,64 +18,37 @@ type Annonce = {
   favoris?: number;
   statut?: string;
   photos?: string[];
+  description?: string;
+  telephone?: string;
 };
 
-type Commande = {
-  id: string;
-  annonce_id: string;
-  acheteur_id: string;
-  acheteur_nom: string;
+type CommandeGraph = {
+  created_at: string;
   statut: string;
-  created_at: string;
-  annonces?: { titre: string; prix_vente: number; photos?: string[] };
-};
-
-type Message = {
-  id: string;
-  commande_id: string;
-  expediteur_id: string;
-  destinataire_id: string;
-  contenu: string;
-  lu: boolean;
-  created_at: string;
-};
-
-type Conversation = {
-  commande_id: string;
-  autre_utilisateur_id: string;
-  autre_utilisateur_nom: string;
-  annonce_titre: string;
-  dernier_message?: string;
-  dernier_message_date?: string;
-  non_lus: number;
 };
 
 function Icon({ name, size = 18, color = "currentColor" }: { name: string; size?: number; color?: string }) {
-  const s = { width: size, height: size };
+  const s: React.CSSProperties = { width: size, height: size };
   const p = { fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  const icons: Record<string, React.JSX.Element> = {
+  const icons: Record<string, React.ReactElement> = {
     grid: <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
     box: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
     shopping: <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>,
     message: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
     chart: <svg viewBox="0 0 24 24" style={s} {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
-    tag: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
     wallet: <svg viewBox="0 0 24 24" style={s} {...p}><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
     star: <svg viewBox="0 0 24 24" style={s} {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
     settings: <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
     bell: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
     search: <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
     plus: <svg viewBox="0 0 24 24" style={s} {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-    edit: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
     trash: <svg viewBox="0 0 24 24" style={s} {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>,
     eye: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
-    share: <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,
     arrow: <svg viewBox="0 0 24 24" style={s} {...p}><polyline points="9 18 15 12 9 6"/></svg>,
     logout: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
     shield: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     check: <svg viewBox="0 0 24 24" style={s} {...p}><polyline points="20 6 9 17 4 12"/></svg>,
-    send: <svg viewBox="0 0 24 24" style={s} {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
-    back: <svg viewBox="0 0 24 24" style={s} {...p}><polyline points="15 18 9 12 15 6"/></svg>,
+    close: <svg viewBox="0 0 24 24" style={s} {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   };
   return icons[name] || <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="12" cy="12" r="10"/></svg>;
 }
@@ -82,16 +56,24 @@ function Icon({ name, size = 18, color = "currentColor" }: { name: string; size?
 const NAV_ITEMS = [
   { label: "Dashboard", icon: "grid" },
   { label: "Mes Produits", icon: "box" },
-  { label: "Commandes", icon: "shopping", badge: "commandes" },
-  { label: "Messages", icon: "message", badge: "messages" },
+  { label: "Commandes", icon: "shopping", badge: 0 },
+  { label: "Messages", icon: "message", badge: 0 },
   { label: "Analytics", icon: "chart" },
-  { label: "Promotions", icon: "tag" },
   { label: "Wallet", icon: "wallet" },
   { label: "Avis Clients", icon: "star" },
   { label: "Parametres", icon: "settings" },
 ];
 
-const MOCK_GRAPHIQUE = [1200, 1800, 1500, 2200, 1900, 2800, 2400, 3100, 2700, 3500, 3200, 3800];
+// Génère les 30 derniers jours
+function getLast30Days(): string[] {
+  const days: string[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split("T")[0]);
+  }
+  return days;
+}
 
 export default function DashboardVendeur() {
   const router = useRouter();
@@ -99,38 +81,34 @@ export default function DashboardVendeur() {
   const [loading, setLoading] = useState(true);
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [annonces, setAnnonces] = useState<Annonce[]>([]);
-  const [commandes, setCommandes] = useState<Commande[]>([]);
+  const [commandes, setCommandes] = useState<CommandeGraph[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  // Messagerie
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [convActive, setConvActive] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [nouveauMsg, setNouveauMsg] = useState("");
-  const [envoi, setEnvoi] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [recherche, setRecherche] = useState("");
+  const [rechercheActive, setRechercheActive] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.replace("/auth"); return; }
       setUser(session.user);
 
-      // Annonces
-      const { data: ann } = await supabase
-        .from("annonces").select("*")
+      // Charger annonces
+      const { data: annoncesData } = await supabase
+        .from("annonces")
+        .select("*")
         .eq("vendeur_id", session.user.id)
         .order("created_at", { ascending: false });
-      if (ann) setAnnonces(ann);
+      if (annoncesData) setAnnonces(annoncesData);
 
-      // Commandes
-      const { data: cmd } = await supabase
-        .from("commandes").select("*, annonces(titre, prix_vente, photos)")
+      // Charger commandes des 30 derniers jours
+      const il_y_a_30_jours = new Date();
+      il_y_a_30_jours.setDate(il_y_a_30_jours.getDate() - 30);
+
+      const { data: commandesData } = await supabase
+        .from("commandes")
+        .select("created_at, statut")
         .eq("vendeur_id", session.user.id)
-        .order("created_at", { ascending: false });
-      if (cmd) setCommandes(cmd);
-
-      // Conversations : charger les messages dont je suis expediteur ou destinataire
-      await chargerConversations(session.user.id);
+        .gte("created_at", il_y_a_30_jours.toISOString());
+      if (commandesData) setCommandes(commandesData);
 
       setLoading(false);
     });
@@ -141,102 +119,40 @@ export default function DashboardVendeur() {
     return () => subscription.unsubscribe();
   }, [router]);
 
-  // Scroll automatique vers le bas dans le chat
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // ── DONNÉES GRAPHIQUE ────────────────────────────────────────
+  const donneesGraphique = useMemo(() => {
+    const jours = getLast30Days();
 
-  async function chargerConversations(userId: string) {
-    // Récupérer tous les messages impliquant cet utilisateur
-    const { data } = await supabase
-      .from("messages")
-      .select("*, commandes(id, annonce_id, acheteur_id, acheteur_nom, vendeur_id, annonces(titre))")
-      .or(`expediteur_id.eq.${userId},destinataire_id.eq.${userId}`)
-      .order("created_at", { ascending: false });
+    return jours.map(jour => {
+      const commandesJour = commandes.filter(c =>
+        c.created_at.split("T")[0] === jour && c.statut === "confirmee"
+      ).length;
 
-    if (!data) return;
+      const ventesJour = commandes.filter(c =>
+        c.created_at.split("T")[0] === jour && c.statut === "terminee"
+      ).length;
 
-    // Grouper par commande_id pour construire les conversations
-    const convMap = new Map<string, Conversation>();
-    for (const msg of data) {
-      if (!convMap.has(msg.commande_id)) {
-        const commande = msg.commandes as any;
-        const autreId = msg.expediteur_id === userId ? msg.destinataire_id : msg.expediteur_id;
-        const autreNom = commande?.acheteur_id === autreId
-          ? (commande?.acheteur_nom || "Acheteur")
-          : "Vendeur";
+      return { jour, commandes: commandesJour, ventes: ventesJour };
+    });
+  }, [commandes]);
 
-        convMap.set(msg.commande_id, {
-          commande_id: msg.commande_id,
-          autre_utilisateur_id: autreId,
-          autre_utilisateur_nom: autreNom,
-          annonce_titre: commande?.annonces?.titre || "Annonce",
-          dernier_message: msg.contenu,
-          dernier_message_date: msg.created_at,
-          non_lus: 0,
-        });
-      }
-      // Compter les non lus
-      if (!msg.lu && msg.destinataire_id === userId) {
-        const conv = convMap.get(msg.commande_id)!;
-        conv.non_lus += 1;
-      }
-    }
-    setConversations(Array.from(convMap.values()));
-  }
+  const maxVal = useMemo(() => {
+    const max = Math.max(...donneesGraphique.map(d => Math.max(d.commandes, d.ventes)), 1);
+    return max;
+  }, [donneesGraphique]);
 
-  async function ouvrirConversation(conv: Conversation) {
-    setConvActive(conv);
-    // Charger les messages de cette conversation
-    const { data } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("commande_id", conv.commande_id)
-      .order("created_at", { ascending: true });
-    if (data) setMessages(data);
-
-    // Marquer comme lus
-    await supabase
-      .from("messages")
-      .update({ lu: true })
-      .eq("commande_id", conv.commande_id)
-      .eq("destinataire_id", user?.id);
-
-    // Mettre à jour localement
-    setConversations(prev => prev.map(c =>
-      c.commande_id === conv.commande_id ? { ...c, non_lus: 0 } : c
-    ));
-  }
-
-  async function envoyerMessage() {
-    if (!nouveauMsg.trim() || !convActive || !user || envoi) return;
-    setEnvoi(true);
-    const contenu = nouveauMsg.trim();
-    setNouveauMsg("");
-
-    const { data, error } = await supabase.from("messages").insert({
-      commande_id: convActive.commande_id,
-      expediteur_id: user.id,
-      destinataire_id: convActive.autre_utilisateur_id,
-      contenu,
-      lu: false,
-    }).select().single();
-
-    if (!error && data) {
-      setMessages(prev => [...prev, data]);
-      setConversations(prev => prev.map(c =>
-        c.commande_id === convActive.commande_id
-          ? { ...c, dernier_message: contenu, dernier_message_date: data.created_at }
-          : c
-      ));
-    }
-    setEnvoi(false);
-  }
-
-  async function changerStatutCommande(id: string, statut: string) {
-    const { error } = await supabase.from("commandes").update({ statut }).eq("id", id);
-    if (!error) setCommandes(prev => prev.map(c => c.id === id ? { ...c, statut } : c));
-  }
+  // ── RECHERCHE ────────────────────────────────────────────────
+  const annoncesFiltrees = useMemo(() => {
+    if (!recherche.trim()) return annonces;
+    const q = recherche.toLowerCase().trim();
+    return annonces.filter(a =>
+      a.titre?.toLowerCase().includes(q) ||
+      a.categorie?.toLowerCase().includes(q) ||
+      a.ville?.toLowerCase().includes(q) ||
+      a.etat?.toLowerCase().includes(q) ||
+      a.description?.toLowerCase().includes(q)
+    );
+  }, [annonces, recherche]);
 
   async function supprimerAnnonce(id: string) {
     const { error } = await supabase.from("annonces").delete().eq("id", id);
@@ -244,13 +160,18 @@ export default function DashboardVendeur() {
     setDeleteId(null);
   }
 
+  function handleRechercheChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setRecherche(val);
+    if (val.trim()) { setRechercheActive(true); setActiveNav("Dashboard"); }
+    else { setRechercheActive(false); }
+  }
+
+  function clearRecherche() { setRecherche(""); setRechercheActive(false); }
+
   if (loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f9fafb", fontFamily: "Inter, sans-serif" }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: "#15803d", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 1s linear infinite" }} />
-        <p style={{ color: "#9ca3af", fontSize: 14 }}>Chargement...</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
+      <p style={{ color: "#9ca3af", fontSize: 14 }}>Chargement...</p>
     </div>
   );
 
@@ -259,8 +180,42 @@ export default function DashboardVendeur() {
   const initiales = nom.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
   const totalRevenu = annonces.reduce((s, a) => s + (a.prix_vente || 0), 0);
   const trustScore = 96;
-  const commandesEnAttente = commandes.filter(c => c.statut === "en_attente").length;
-  const totalNonLus = conversations.reduce((s, c) => s + c.non_lus, 0);
+
+  const totalCommandes = commandes.filter(c => c.statut === "confirmee" || c.statut === "terminee").length;
+  const totalVentes = commandes.filter(c => c.statut === "terminee").length;
+
+  // Labels des 30 jours — afficher seulement 6 labels
+  const labelsJours = donneesGraphique
+    .filter((_, i) => i % 5 === 0 || i === 29)
+    .map(d => {
+      const date = new Date(d.jour);
+      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    });
+
+  const W = 580;
+  const H = 140;
+  const paddingLeft = 10;
+  const paddingRight = 10;
+  const graphW = W - paddingLeft - paddingRight;
+
+  function pointsLigne(cle: "commandes" | "ventes") {
+    return donneesGraphique.map((d, i) => {
+      const x = paddingLeft + (i / (donneesGraphique.length - 1)) * graphW;
+      const y = H - (maxVal > 0 ? (d[cle] / maxVal) * (H - 10) : 0);
+      return `${x},${y}`;
+    }).join(" ");
+  }
+
+  function aireRemplie(cle: "commandes" | "ventes") {
+    const pts = donneesGraphique.map((d, i) => {
+      const x = paddingLeft + (i / (donneesGraphique.length - 1)) * graphW;
+      const y = H - (maxVal > 0 ? (d[cle] / maxVal) * (H - 10) : 0);
+      return `${x},${y}`;
+    });
+    return `M ${pts[0]} L ${pts.join(" L ")} L ${paddingLeft + graphW},${H} L ${paddingLeft},${H} Z`;
+  }
+
+  const aucuneDonnee = commandes.length === 0;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#f9fafb", fontFamily: "Inter, system-ui, sans-serif", color: "#111827" }}>
@@ -277,21 +232,14 @@ export default function DashboardVendeur() {
         .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
         .icon-btn:hover { border-color: #15803d; background: #f0fdf4; }
         .icon-btn.danger:hover { border-color: #dc2626; background: #fef2f2; }
-        .topbar-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; transition: all 0.15s; }
+        .topbar-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; }
         .topbar-btn:hover { border-color: #15803d; background: #f0fdf4; }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: center; justify-content: center; }
-        .action-btn { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: 12px; background: #f9fafb; border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 600; color: #374151; text-decoration: none; width: 100%; font-family: inherit; }
+        .action-btn { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: 12px; background: #f9fafb; border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 600; color: #374151; width: 100%; font-family: inherit; }
         .action-btn:hover { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
-        .conv-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; border-bottom: 1px solid #f3f4f6; transition: background 0.15s; }
-        .conv-item:hover { background: #f9fafb; }
-        .conv-item.active { background: #f0fdf4; }
-        .msg-bubble { max-width: 70%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
-        .msg-moi { background: #15803d; color: #fff; border-bottom-right-radius: 4px; margin-left: auto; }
-        .msg-autre { background: #f3f4f6; color: #111827; border-bottom-left-radius: 4px; }
-        .cmd-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #f3f4f6; gap: 12px; }
-        .cmd-row:last-child { border-bottom: none; }
-        .badge-statut { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: inline-block; }
-        .input-msg { flex: 1; border: none; outline: none; font-size: 14px; font-family: inherit; background: transparent; color: #111827; padding: "8px 0"; }
+        .search-result-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f3f4f6; transition: background 0.1s; }
+        .search-result-item:hover { background: #f9fafb; }
+        .search-result-item:last-child { border-bottom: none; }
       `}</style>
 
       {/* MODAL SUPPRESSION */}
@@ -302,7 +250,7 @@ export default function DashboardVendeur() {
               <Icon name="trash" size={24} color="#dc2626" />
             </div>
             <h3 style={{ fontSize: 18, fontWeight: 800, color: "#111827", marginBottom: 8 }}>Supprimer cette annonce ?</h3>
-            <p style={{ fontSize: 14, color: "#6b7280", lineHeight: 1.6, marginBottom: 24 }}>Cette action est irreversible.</p>
+            <p style={{ fontSize: 14, color: "#6b7280", lineHeight: 1.6, marginBottom: 24 }}>Cette action est irréversible.</p>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setDeleteId(null)} style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#374151" }}>Annuler</button>
               <button onClick={() => supprimerAnnonce(deleteId)} style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none", background: "#dc2626", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Supprimer</button>
@@ -323,22 +271,31 @@ export default function DashboardVendeur() {
             </span>
           </a>
         </div>
+
         <nav style={{ flex: 1, padding: "12px" }}>
-          {NAV_ITEMS.map(item => {
-            const badgeCount = item.badge === "commandes" ? commandesEnAttente : item.badge === "messages" ? totalNonLus : 0;
-            return (
-              <div key={item.label} className={`nav-item${activeNav === item.label ? " active" : ""}`} onClick={() => setActiveNav(item.label)}>
-                <Icon name={item.icon} size={17} color={activeNav === item.label ? "#15803d" : "#6b7280"} />
-                <span style={{ flex: 1 }}>{item.label}</span>
-                {badgeCount > 0 && (
-                  <span style={{ background: activeNav === item.label ? "#15803d" : "#ef4444", color: "#fff", fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 20 }}>
-                    {badgeCount}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+          {NAV_ITEMS.map(item => (
+            <div key={item.label}
+              className={`nav-item${activeNav === item.label && !rechercheActive ? " active" : ""}`}
+              onClick={() => {
+                if (item.label === "Analytics") {
+                router.push("/dashboard/vendeur/analytics");
+                } else {
+                  setActiveNav(item.label);
+                  clearRecherche();
+                  }
+              }}
+            >
+              <Icon name={item.icon} size={17} color={activeNav === item.label && !rechercheActive ? "#15803d" : "#6b7280"} />
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge ? (
+                <span style={{ background: activeNav === item.label ? "#15803d" : "#e5e7eb", color: activeNav === item.label ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 20 }}>
+                  {item.badge}
+                </span>
+              ) : null}
+            </div>
+          ))}
         </nav>
+
         <div style={{ margin: "12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 14, padding: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <Icon name="shield" size={16} color="#15803d" />
@@ -350,15 +307,17 @@ export default function DashboardVendeur() {
             <div style={{ height: "100%", width: `${trustScore}%`, background: "#15803d", borderRadius: 3 }} />
           </div>
         </div>
+
         <div style={{ margin: "0 12px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 14, padding: "16px" }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 4 }}>Booster vos ventes</p>
           <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5, marginBottom: 12 }}>Mettez en avant vos annonces.</p>
           <button style={{ width: "100%", background: "#15803d", color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            Creer une promotion
+            Créer une promotion
           </button>
         </div>
+
         <div style={{ padding: "12px 20px 20px", borderTop: "1px solid #f3f4f6" }}>
-          <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Besoin d aide ?</p>
+          <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Besoin d'aide ?</p>
           <button style={{ background: "transparent", border: "none", color: "#15803d", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
             Contacter le support
           </button>
@@ -370,24 +329,30 @@ export default function DashboardVendeur() {
 
         {/* TOPBAR */}
         <header style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
-          <div style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 14px", gap: 8 }}>
-            <Icon name="search" size={15} color="#9ca3af" />
-            <input placeholder="Rechercher un produit, une commande..." style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#111827", padding: "9px 0", fontFamily: "inherit" }} />
+          <div style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: `1.5px solid ${rechercheActive ? "#15803d" : "#e5e7eb"}`, borderRadius: 10, padding: "0 14px", gap: 8, transition: "border-color 0.2s" }}>
+            <Icon name="search" size={15} color={rechercheActive ? "#15803d" : "#9ca3af"} />
+            <input
+              value={recherche}
+              onChange={handleRechercheChange}
+              placeholder="Rechercher un produit, une categorie, une ville..."
+              style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#111827", padding: "9px 0", fontFamily: "inherit" }}
+            />
+            {rechercheActive && (
+              <button onClick={clearRecherche} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}>
+                <Icon name="close" size={14} color="#9ca3af" />
+              </button>
+            )}
           </div>
+
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             <button style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               onClick={() => router.push("/vendre")}>
               <Icon name="plus" size={15} color="#fff" />
               Publier une annonce
             </button>
-            <div className="topbar-btn" style={{ position: "relative" }}>
-              <Icon name="bell" size={17} color="#6b7280" />
-              {commandesEnAttente > 0 && <span style={{ position: "absolute", top: 6, right: 6, width: 8, height: 8, background: "#ef4444", borderRadius: "50%", border: "2px solid #fff" }} />}
-            </div>
+            <div className="topbar-btn"><Icon name="bell" size={17} color="#6b7280" /></div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", background: "#fff" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700 }}>
-                {initiales}
-              </div>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700 }}>{initiales}</div>
               <div>
                 <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>{prenom}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -402,151 +367,71 @@ export default function DashboardVendeur() {
           </div>
         </header>
 
-        <main style={{ flex: 1, padding: activeNav === "Messages" ? "0" : "28px", overflow: "hidden" }}>
+        <main style={{ flex: 1, padding: "28px" }}>
 
-          {/* ── MESSAGES ── */}
-          {activeNav === "Messages" && (
-            <div style={{ display: "flex", height: "calc(100vh - 60px)" }}>
-
-              {/* Liste conversations */}
-              <div style={{ width: 300, borderRight: "1px solid #e5e7eb", background: "#fff", display: "flex", flexDirection: "column" }}>
-                <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #f3f4f6" }}>
-                  <h2 style={{ fontSize: 16, fontWeight: 800, color: "#111827", marginBottom: 10 }}>Messages</h2>
-                  <div style={{ display: "flex", alignItems: "center", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", gap: 8 }}>
-                    <Icon name="search" size={14} color="#9ca3af" />
-                    <input placeholder="Rechercher..." style={{ flex: 1, border: "none", outline: "none", fontSize: 13, background: "transparent", padding: "8px 0", fontFamily: "inherit" }} />
-                  </div>
+          {/* ── RÉSULTATS RECHERCHE ── */}
+          {rechercheActive && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <div>
+                  <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", marginBottom: 4 }}>
+                    Résultats pour "<span style={{ color: "#15803d" }}>{recherche}</span>"
+                  </h1>
+                  <p style={{ fontSize: 14, color: "#9ca3af" }}>
+                    {annoncesFiltrees.length} annonce{annoncesFiltrees.length > 1 ? "s" : ""} trouvée{annoncesFiltrees.length > 1 ? "s" : ""}
+                  </p>
                 </div>
-                <div style={{ flex: 1, overflowY: "auto" }}>
-                  {conversations.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "48px 16px" }}>
-                      <Icon name="message" size={32} color="#d1d5db" />
-                      <p style={{ fontSize: 14, color: "#9ca3af", marginTop: 12 }}>Aucune conversation</p>
-                      <p style={{ fontSize: 12, color: "#d1d5db", marginTop: 4 }}>Les messages arrivent quand un acheteur vous contacte.</p>
-                    </div>
-                  ) : conversations.map(conv => (
-                    <div key={conv.commande_id} className={`conv-item${convActive?.commande_id === conv.commande_id ? " active" : ""}`}
-                      onClick={() => ouvrirConversation(conv)}>
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14, fontWeight: 700, color: "#15803d" }}>
-                        {conv.autre_utilisateur_nom.charAt(0).toUpperCase()}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                          <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.autre_utilisateur_nom}</p>
-                          {conv.dernier_message_date && (
-                            <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>
-                              {new Date(conv.dernier_message_date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>{conv.annonce_titre}</p>
-                        {conv.dernier_message && (
-                          <p style={{ fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{conv.dernier_message}</p>
-                        )}
-                      </div>
-                      {conv.non_lus > 0 && (
-                        <span style={{ background: "#15803d", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 20, flexShrink: 0 }}>{conv.non_lus}</span>
-                      )}
-                    </div>
-                  ))}
+                <button onClick={clearRecherche} style={{ fontSize: 13, color: "#6b7280", background: "transparent", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                  Effacer
+                </button>
+              </div>
+              {annoncesFiltrees.length === 0 ? (
+                <div style={{ background: "#fff", borderRadius: 14, padding: "60px 24px", textAlign: "center", border: "1px solid #e5e7eb" }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Aucun résultat pour "{recherche}"</p>
+                  <p style={{ fontSize: 14, color: "#9ca3af" }}>Aucune de vos annonces ne correspond.</p>
                 </div>
-              </div>
-
-              {/* Zone de chat */}
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb" }}>
-                {!convActive ? (
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#f0fdf4", border: "2px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-                      <Icon name="message" size={28} color="#15803d" />
-                    </div>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Vos messages</p>
-                    <p style={{ fontSize: 14, color: "#9ca3af" }}>Selectionnez une conversation pour commencer.</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Header chat */}
-                    <div style={{ padding: "14px 20px", background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: 12 }}>
-                      <button onClick={() => setConvActive(null)} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                        <Icon name="back" size={18} color="#6b7280" />
-                      </button>
-                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#15803d" }}>
-                        {convActive.autre_utilisateur_nom.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{convActive.autre_utilisateur_nom}</p>
-                        <p style={{ fontSize: 12, color: "#9ca3af" }}>{convActive.annonce_titre}</p>
-                      </div>
-                    </div>
-
-                    {/* Messages */}
-                    <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {messages.length === 0 ? (
-                        <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af", fontSize: 14 }}>
-                          Debut de la conversation. Envoyez votre premier message.
+              ) : (
+                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden" }}>
+                  {annoncesFiltrees.map(a => {
+                    const photo = Array.isArray(a.photos) && a.photos.length > 0 ? a.photos[0] : null;
+                    return (
+                      <div key={a.id} className="search-result-item">
+                        <div style={{ width: 48, height: 48, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {photo ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon name="box" size={20} color="#86efac" />}
                         </div>
-                      ) : messages.map(msg => {
-                        const estMoi = msg.expediteur_id === user?.id;
-                        return (
-                          <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: estMoi ? "flex-end" : "flex-start" }}>
-                            <div className={`msg-bubble ${estMoi ? "msg-moi" : "msg-autre"}`}>
-                              {msg.contenu}
-                            </div>
-                            <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>
-                              {new Date(msg.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Input message */}
-                    <div style={{ padding: "14px 20px", background: "#fff", borderTop: "1px solid #e5e7eb", display: "flex", gap: 10, alignItems: "center" }}>
-                      <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 12, padding: "10px 16px", gap: 10 }}>
-                        <input
-                          className="input-msg"
-                          placeholder="Ecrivez votre message..."
-                          value={nouveauMsg}
-                          onChange={e => setNouveauMsg(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyerMessage(); } }}
-                        />
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
+                          <p style={{ fontSize: 12, color: "#9ca3af" }}>{a.categorie} · {a.ville} · {a.etat}</p>
+                        </div>
+                        <p style={{ fontSize: 15, fontWeight: 800, color: "#15803d" }}>{(a.prix_vente || 0).toLocaleString()} GHS</p>
+                        <button className="icon-btn danger" onClick={() => setDeleteId(a.id)} style={{ marginLeft: 12 }}>
+                          <Icon name="trash" size={14} color="#dc2626" />
+                        </button>
                       </div>
-                      <button
-                        onClick={envoyerMessage}
-                        disabled={!nouveauMsg.trim() || envoi}
-                        style={{ width: 42, height: 42, borderRadius: 12, background: nouveauMsg.trim() ? "#15803d" : "#e5e7eb", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: nouveauMsg.trim() ? "pointer" : "default", transition: "all 0.2s", flexShrink: 0 }}
-                      >
-                        <Icon name="send" size={17} color={nouveauMsg.trim() ? "#fff" : "#9ca3af"} />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {/* ── MES PRODUITS ── */}
-          {activeNav === "Mes Produits" && (
+          {!rechercheActive && activeNav === "Mes Produits" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
                 <div>
                   <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Mes Produits</h1>
-                  <p style={{ fontSize: 14, color: "#9ca3af" }}>{annonces.length} annonce{annonces.length > 1 ? "s" : ""} publiee{annonces.length > 1 ? "s" : ""}</p>
+                  <p style={{ fontSize: 14, color: "#9ca3af" }}>{annonces.length} annonce{annonces.length > 1 ? "s" : ""} publiée{annonces.length > 1 ? "s" : ""}</p>
                 </div>
                 <button onClick={() => router.push("/vendre")} style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                  <Icon name="plus" size={16} color="#fff" />
-                  Nouvelle annonce
+                  <Icon name="plus" size={16} color="#fff" /> Nouvelle annonce
                 </button>
               </div>
               {annonces.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "64px 24px", background: "#fff", borderRadius: 16, border: "1px dashed #d1d5db" }}>
-                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                    <Icon name="box" size={28} color="#15803d" />
-                  </div>
                   <p style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 6 }}>Aucun produit</p>
-                  <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 20 }}>Vous n avez pas encore publie d annonce.</p>
-                  <button onClick={() => router.push("/vendre")} style={{ background: "#15803d", color: "#fff", border: "none", borderRadius: 10, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                    Publier ma premiere annonce
+                  <button onClick={() => router.push("/vendre")} style={{ background: "#15803d", color: "#fff", border: "none", borderRadius: 10, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>
+                    Publier ma première annonce
                   </button>
                 </div>
               ) : (
@@ -556,33 +441,18 @@ export default function DashboardVendeur() {
                     return (
                       <div key={a.id} className="product-card">
                         <div style={{ height: 180, background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", position: "relative", overflow: "hidden" }}>
-                          {photo
-                            ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                            : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="box" size={40} color="#86efac" /></div>
-                          }
+                          {photo ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="box" size={40} color="#86efac" /></div>}
                           <div style={{ position: "absolute", top: 10, left: 10, background: "#15803d", color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6 }}>
                             {a.statut ? a.statut.charAt(0).toUpperCase() + a.statut.slice(1) : "Actif"}
                           </div>
-                          {a.score_prix && (
-                            <div style={{ position: "absolute", top: 10, right: 10, background: a.score_prix === "bon" ? "#f0fdf4" : "#fffbeb", color: a.score_prix === "bon" ? "#15803d" : "#92400e", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6, border: `1px solid ${a.score_prix === "bon" ? "#bbf7d0" : "#fde68a"}` }}>
-                              {a.score_prix === "bon" ? "Prix coherent" : "Prix eleve"}
-                            </div>
-                          )}
                         </div>
                         <div style={{ padding: 16 }}>
                           <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>{a.categorie} · {a.ville}</p>
-                          <p style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 8, lineHeight: 1.3 }}>{a.titre}</p>
+                          <p style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 8 }}>{a.titre}</p>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
                             <span style={{ fontSize: 20, fontWeight: 900, color: "#15803d" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
-                            {a.prix_achat && <span style={{ fontSize: 13, color: "#9ca3af", textDecoration: "line-through" }}>{a.prix_achat.toLocaleString()} GHS</span>}
-                          </div>
-                          <div style={{ display: "flex", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid #f3f4f6" }}>
-                            <span style={{ fontSize: 12, color: "#6b7280" }}>{a.vues || 0} vues</span>
-                            <span style={{ fontSize: 12, color: "#6b7280" }}>{a.favoris || 0} favoris</span>
-                            {a.created_at && <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: "auto" }}>{new Date(a.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>}
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
-                            <button style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151", fontFamily: "inherit" }} onClick={() => router.push("/vendre")}>Modifier</button>
                             <button style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151", fontFamily: "inherit" }} onClick={() => router.push("/annonces")}>Voir</button>
                             <button className="icon-btn danger" onClick={() => setDeleteId(a.id)}><Icon name="trash" size={14} color="#dc2626" /></button>
                           </div>
@@ -596,57 +466,29 @@ export default function DashboardVendeur() {
           )}
 
           {/* ── COMMANDES ── */}
-          {activeNav === "Commandes" && (
+          {!rechercheActive && activeNav === "Commandes" && (
             <div>
-              <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Commandes</h1>
-                <p style={{ fontSize: 14, color: "#9ca3af" }}>{commandes.length} commande{commandes.length > 1 ? "s" : ""} au total</p>
-              </div>
-              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden" }}>
-                <div style={{ padding: "12px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12 }}>
-                  {["Produit", "Acheteur", "Statut", "Actions"].map(h => (
-                    <span key={h} style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</span>
-                  ))}
-                </div>
-                {commandes.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#9ca3af", fontSize: 14 }}>Aucune commande pour l instant.</div>
-                ) : commandes.map(cmd => (
-                  <div key={cmd.id} className="cmd-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12, alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 8, background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Icon name="box" size={16} color="#15803d" />
-                      </div>
-                      <div>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{cmd.annonces?.titre || "Produit"}</p>
-                        <p style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(cmd.created_at).toLocaleDateString("fr-FR")}</p>
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 13, color: "#374151", fontWeight: 500 }}>{cmd.acheteur_nom}</span>
-                    <span className="badge-statut" style={{
-                      background: cmd.statut === "confirmee" ? "#f0fdf4" : cmd.statut === "refusee" ? "#fef2f2" : cmd.statut === "terminee" ? "#eff6ff" : "#fffbeb",
-                      color: cmd.statut === "confirmee" ? "#15803d" : cmd.statut === "refusee" ? "#dc2626" : cmd.statut === "terminee" ? "#1d4ed8" : "#92400e",
-                    }}>
-                      {cmd.statut === "en_attente" ? "En attente" : cmd.statut === "confirmee" ? "Confirmee" : cmd.statut === "refusee" ? "Refusee" : cmd.statut === "terminee" ? "Terminee" : cmd.statut}
-                    </span>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {cmd.statut === "en_attente" && (
-                        <>
-                          <button onClick={() => changerStatutCommande(cmd.id, "confirmee")} style={{ padding: "6px 12px", borderRadius: 7, background: "#15803d", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Confirmer</button>
-                          <button onClick={() => changerStatutCommande(cmd.id, "refusee")} style={{ padding: "6px 12px", borderRadius: 7, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Refuser</button>
-                        </>
-                      )}
-                      {cmd.statut === "confirmee" && (
-                        <button onClick={() => changerStatutCommande(cmd.id, "terminee")} style={{ padding: "6px 12px", borderRadius: 7, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Terminer</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Commandes</h1>
+              <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 20 }}>Gérez vos commandes reçues.</p>
+              <button onClick={() => router.push("/dashboard/vendeur/commandes")} style={{ background: "#15803d", color: "#fff", border: "none", borderRadius: 10, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                Voir toutes mes commandes →
+              </button>
+            </div>
+          )}
+
+          {/* ── MESSAGES ── */}
+          {!rechercheActive && activeNav === "Messages" && (
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Messages</h1>
+              <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 20 }}>Vos conversations avec les acheteurs.</p>
+              <button onClick={() => router.push("/dashboard/vendeur/messages")} style={{ background: "#15803d", color: "#fff", border: "none", borderRadius: 10, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                Ouvrir la messagerie →
+              </button>
             </div>
           )}
 
           {/* ── COMING SOON ── */}
-          {["Analytics", "Promotions", "Wallet", "Avis Clients", "Parametres"].includes(activeNav) && (
+          {!rechercheActive && ["Analytics", "Wallet", "Avis Clients", "Parametres"].includes(activeNav) && (
             <div style={{ textAlign: "center", padding: "80px 24px" }}>
               <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#f0fdf4", border: "2px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
                 <Icon name={NAV_ITEMS.find(n => n.label === activeNav)?.icon || "grid"} size={28} color="#15803d" />
@@ -657,19 +499,19 @@ export default function DashboardVendeur() {
           )}
 
           {/* ── DASHBOARD PRINCIPAL ── */}
-          {activeNav === "Dashboard" && (
+          {!rechercheActive && activeNav === "Dashboard" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-                <div>
-                  <h1 style={{ fontSize: 24, fontWeight: 900, color: "#111827", marginBottom: 4, letterSpacing: "-0.5px" }}>Bienvenue, {prenom} !</h1>
-                  <p style={{ fontSize: 14, color: "#9ca3af" }}>Voici ce qui se passe dans votre boutique aujourd hui.</p>
-                </div>
+              <div style={{ marginBottom: 24 }}>
+                <h1 style={{ fontSize: 24, fontWeight: 900, color: "#111827", marginBottom: 4, letterSpacing: "-0.5px" }}>Bienvenue, {prenom} !</h1>
+                <p style={{ fontSize: 14, color: "#9ca3af" }}>Voici ce qui se passe dans votre boutique aujourd'hui.</p>
               </div>
+
+              {/* STATS */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
                   { label: "Revenus totaux", value: `${totalRevenu.toLocaleString()} GHS`, sub: `${annonces.length} annonces au total`, icon: "wallet", color: "#15803d", bg: "#f0fdf4" },
                   { label: "Produits actifs", value: String(annonces.filter(a => !a.statut || a.statut === "actif").length), sub: `sur ${annonces.length} annonces`, icon: "box", color: "#7c3aed", bg: "#faf5ff" },
-                  { label: "Prix coherents", value: String(annonces.filter(a => a.score_prix === "bon").length), sub: `${annonces.filter(a => a.score_prix !== "bon").length} a verifier`, icon: "shield", color: "#0e7490", bg: "#ecfeff" },
+                  { label: "Commandes reçues", value: String(totalCommandes), sub: `${totalVentes} vente${totalVentes > 1 ? "s" : ""} finalisée${totalVentes > 1 ? "s" : ""}`, icon: "shopping", color: "#0e7490", bg: "#ecfeff" },
                   { label: "Trust Score", value: `${trustScore}/100`, sub: "Excellent", icon: "star", color: "#d97706", bg: "#fffbeb" },
                 ].map(s => (
                   <div key={s.label} className="stat-card">
@@ -685,29 +527,84 @@ export default function DashboardVendeur() {
                 ))}
               </div>
 
+              {/* GRAPHIQUE + ACTIONS */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 16, marginBottom: 24 }}>
+
+                {/* GRAPHIQUE RÉEL */}
                 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px" }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 20 }}>Ventes sur 30 jours</h2>
-                  <svg width="100%" height="160" viewBox="0 0 600 160" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#15803d" stopOpacity="0.15"/>
-                        <stop offset="100%" stopColor="#15803d" stopOpacity="0"/>
-                      </linearGradient>
-                    </defs>
-                    {[0,1,2,3].map(i => <line key={i} x1="0" y1={i*40} x2="600" y2={i*40} stroke="#f3f4f6" strokeWidth="1"/>)}
-                    <path d={`M ${MOCK_GRAPHIQUE.map((v,i) => `${i*54},${150-(v/4000)*140}`).join(" L ")} L ${11*54},150 L 0,150 Z`} fill="url(#grad)"/>
-                    <polyline points={MOCK_GRAPHIQUE.map((v,i) => `${i*54},${150-(v/4000)*140}`).join(" ")} fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    {MOCK_GRAPHIQUE.map((v,i) => <circle key={i} cx={i*54} cy={150-(v/4000)*140} r="4" fill="#fff" stroke="#15803d" strokeWidth="2.5"/>)}
-                  </svg>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div>
+                      <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>Activité sur 30 jours</h2>
+                      <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
+                        {totalCommandes} commande{totalCommandes > 1 ? "s" : ""} · {totalVentes} vente{totalVentes > 1 ? "s" : ""} finalisée{totalVentes > 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    {/* Légende */}
+                    <div style={{ display: "flex", gap: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div style={{ width: 10, height: 3, background: "#15803d", borderRadius: 2 }} />
+                        <span style={{ fontSize: 11, color: "#6b7280" }}>Commandes</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div style={{ width: 10, height: 3, background: "#7c3aed", borderRadius: 2 }} />
+                        <span style={{ fontSize: 11, color: "#6b7280" }}>Ventes</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {aucuneDonnee ? (
+                    <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb", borderRadius: 10, border: "1px dashed #e5e7eb" }}>
+                      <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 4 }}>Aucune activité sur 30 jours</p>
+                      <p style={{ fontSize: 11, color: "#d1d5db" }}>Le graphique apparaîtra à la première commande confirmée</p>
+                    </div>
+                  ) : (
+                    <>
+                      <svg width="100%" height="160" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="gradCommandes" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#15803d" stopOpacity="0.15"/>
+                            <stop offset="100%" stopColor="#15803d" stopOpacity="0"/>
+                          </linearGradient>
+                          <linearGradient id="gradVentes" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.1"/>
+                            <stop offset="100%" stopColor="#7c3aed" stopOpacity="0"/>
+                          </linearGradient>
+                        </defs>
+                        {[0,1,2,3].map(i => <line key={i} x1="0" y1={i*(H/3)} x2={W} y2={i*(H/3)} stroke="#f3f4f6" strokeWidth="1"/>)}
+                        {/* Aire commandes */}
+                        <path d={aireRemplie("commandes")} fill="url(#gradCommandes)" />
+                        {/* Ligne commandes */}
+                        <polyline points={pointsLigne("commandes")} fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        {/* Aire ventes */}
+                        <path d={aireRemplie("ventes")} fill="url(#gradVentes)" />
+                        {/* Ligne ventes */}
+                        <polyline points={pointsLigne("ventes")} fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 2"/>
+                        {/* Points commandes */}
+                        {donneesGraphique.map((d, i) => d.commandes > 0 && (
+                          <circle key={`c${i}`} cx={paddingLeft + (i/(donneesGraphique.length-1))*graphW} cy={H-(maxVal>0?(d.commandes/maxVal)*(H-10):0)} r="4" fill="#fff" stroke="#15803d" strokeWidth="2.5"/>
+                        ))}
+                        {/* Points ventes */}
+                        {donneesGraphique.map((d, i) => d.ventes > 0 && (
+                          <circle key={`v${i}`} cx={paddingLeft + (i/(donneesGraphique.length-1))*graphW} cy={H-(maxVal>0?(d.ventes/maxVal)*(H-10):0)} r="4" fill="#fff" stroke="#7c3aed" strokeWidth="2"/>
+                        ))}
+                      </svg>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                        {labelsJours.map((l, i) => (
+                          <span key={i} style={{ fontSize: 10, color: "#9ca3af" }}>{l}</span>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
+
+                {/* ACTIONS RAPIDES */}
                 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px" }}>
                   <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 16 }}>Actions rapides</h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[
                       { label: "Nouvelle annonce", icon: "plus", action: () => router.push("/vendre") },
-                      { label: "Mes produits", icon: "box", action: () => setActiveNav("Mes Produits") },
-                      { label: "Messages", icon: "message", action: () => setActiveNav("Messages") },
+                      { label: "Mes produits", icon: "box", action: () => { setActiveNav("Mes Produits"); clearRecherche(); } },
+                      { label: "Voir les annonces", icon: "eye", action: () => router.push("/annonces") },
                     ].map(a => (
                       <button key={a.label} className="action-btn" onClick={a.action}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -721,50 +618,54 @@ export default function DashboardVendeur() {
                 </div>
               </div>
 
+              {/* ANNONCES RÉCENTES */}
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px", borderBottom: "1px solid #e5e7eb" }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>Mes annonces recentes</h2>
-                  <button onClick={() => setActiveNav("Mes Produits")} style={{ fontSize: 13, color: "#15803d", fontWeight: 600, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Voir toutes →</button>
+                  <div>
+                    <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>Mes annonces récentes</h2>
+                    <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>{annonces.length} annonce{annonces.length > 1 ? "s" : ""} au total</p>
+                  </div>
+                  <button onClick={() => { setActiveNav("Mes Produits"); clearRecherche(); }} style={{ fontSize: 13, color: "#15803d", fontWeight: 600, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                    Voir toutes →
+                  </button>
                 </div>
                 <div style={{ padding: "10px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 90px", gap: 12 }}>
                   {["Produit", "Prix", "Fair Price", "Statut"].map(h => (
                     <span key={h} style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</span>
                   ))}
                 </div>
-                {annonces.slice(0, 5).map(a => {
-                  const photo = Array.isArray(a.photos) && a.photos.length > 0 ? a.photos[0] : null;
-                  return (
-                    <div key={a.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 90px", gap: 12, padding: "14px 20px", borderBottom: "1px solid #f3f4f6", alignItems: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {photo ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon name="box" size={18} color="#86efac" />}
+                {annoncesFiltrees.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af", fontSize: 14 }}>
+                    Aucune annonce publiée pour l'instant.
+                  </div>
+                ) : (
+                  annoncesFiltrees.slice(0, 5).map(a => {
+                    const photo = Array.isArray(a.photos) && a.photos.length > 0 ? a.photos[0] : null;
+                    return (
+                      <div key={a.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 90px", gap: 12, padding: "14px 20px", borderBottom: "1px solid #f3f4f6", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {photo ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon name="box" size={18} color="#86efac" />}
+                          </div>
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
+                            <p style={{ fontSize: 11, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
-                          <p style={{ fontSize: 11, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, color: "#374151" }}>{(a.prix_achat || 0).toLocaleString()} GHS</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: a.score_prix === "bon" ? "#f0fdf4" : "#fffbeb", color: a.score_prix === "bon" ? "#15803d" : "#92400e" }}>
+                            {a.score_prix === "bon" ? "Bon" : "Elevé"}
+                          </span>
                         </div>
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 13, color: "#374151" }}>{(a.prix_achat || 0).toLocaleString()} GHS</span>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: a.score_prix === "bon" ? "#f0fdf4" : "#fffbeb", color: a.score_prix === "bon" ? "#15803d" : "#92400e" }}>
-                          {a.score_prix === "bon" ? "Bon" : "Eleve"}
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", display: "inline-block" }}>
+                          {a.statut ? a.statut.charAt(0).toUpperCase() + a.statut.slice(1) : "Actif"}
                         </span>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", display: "inline-block" }}>
-                        {a.statut ? a.statut.charAt(0).toUpperCase() + a.statut.slice(1) : "Actif"}
-                      </span>
-                    </div>
-                  );
-                })}
-                {annonces.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af", fontSize: 14 }}>Aucune annonce publiee.</div>
+                    );
+                  })
                 )}
-                <div style={{ padding: "14px 20px", textAlign: "center" }}>
-                  <button onClick={() => setActiveNav("Mes Produits")} style={{ fontSize: 13, color: "#15803d", fontWeight: 700, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                    Voir toutes mes annonces →
-                  </button>
-                </div>
               </div>
             </div>
           )}
