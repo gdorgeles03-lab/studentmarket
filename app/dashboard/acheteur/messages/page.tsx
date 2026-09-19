@@ -165,6 +165,16 @@ export default function MessagesAcheteurPage() {
         .msg-moi { background: #15803d; color: #fff; border-bottom-right-radius: 4px; align-self: flex-end; }
         .msg-lui { background: #fff; color: #111827; border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; align-self: flex-start; }
         input:focus { outline: none; border-color: #15803d !important; }
+
+        .back-btn-mobile { display: none; }
+
+        @media (max-width: 768px) {
+          .messages-grid { grid-template-columns: 1fr !important; }
+          .conv-list-pane.conv-hidden-mobile { display: none !important; }
+          .chat-pane.chat-hidden-mobile { display: none !important; }
+          .back-btn-mobile { display: flex !important; }
+          .msg-bubble { max-width: 85% !important; }
+        }
       `}</style>
 
       {/* HEADER */}
@@ -176,10 +186,10 @@ export default function MessagesAcheteurPage() {
         <span style={{ fontSize: 13, color: "#9ca3af" }}>— conversations avec vos vendeurs</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", height: "calc(100vh - 65px)" }}>
+      <div className="messages-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", height: "calc(100vh - 65px)" }}>
 
         {/* LISTE CONVERSATIONS */}
-        <div style={{ background: "#fff", borderRight: "1px solid #e5e7eb", overflowY: "auto" }}>
+        <div className={`conv-list-pane${convActive ? " conv-hidden-mobile" : ""}`} style={{ background: "#fff", borderRight: "1px solid #e5e7eb", overflowY: "auto" }}>
           <div style={{ padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
               {conversations.length} conversation{conversations.length > 1 ? "s" : ""}
@@ -233,7 +243,7 @@ export default function MessagesAcheteurPage() {
 
         {/* ZONE CHAT */}
         {!convActive ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb" }}>
+          <div className={`chat-pane${!convActive ? "" : " chat-hidden-mobile"}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb" }}>
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#f0fdf4", border: "2px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
@@ -241,19 +251,22 @@ export default function MessagesAcheteurPage() {
             <p style={{ fontSize: 13, color: "#9ca3af" }}>Selectionnez une conversation pour commencer.</p>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", background: "#f9fafb" }}>
+          <div className="chat-pane" style={{ display: "flex", flexDirection: "column", background: "#f9fafb" }}>
 
             {/* Header chat */}
             <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700 }}>
+              <button className="back-btn-mobile" onClick={() => setConvActive(null)} aria-label="Retour aux conversations" style={{ background: "none", border: "none", cursor: "pointer", alignItems: "center", justifyContent: "center", padding: 0, marginRight: 2 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                 {initiales(convActive.vendeur_nom)}
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <p style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{convActive.vendeur_nom}</p>
-                <p style={{ fontSize: 12, color: "#9ca3af" }}>Re: {convActive.annonce_titre}</p>
+                <p style={{ fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Re: {convActive.annonce_titre}</p>
               </div>
-              <div style={{ marginLeft: "auto", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "4px 12px" }}>
-                <span style={{ fontSize: 12, color: "#15803d", fontWeight: 600 }}>Commande confirmée</span>
+              <div style={{ marginLeft: "auto", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "4px 12px", flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: "#15803d", fontWeight: 600, whiteSpace: "nowrap" }}>Confirmée</span>
               </div>
             </div>
 
@@ -294,7 +307,7 @@ export default function MessagesAcheteurPage() {
               <button
                 onClick={envoyer}
                 disabled={envoi || !contenu.trim()}
-                style={{ width: 42, height: 42, borderRadius: "50%", background: contenu.trim() ? "#15803d" : "#e5e7eb", border: "none", cursor: contenu.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" }}
+                style={{ width: 42, height: 42, borderRadius: "50%", background: contenu.trim() ? "#15803d" : "#e5e7eb", border: "none", cursor: contenu.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>

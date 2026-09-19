@@ -71,6 +71,7 @@ export default function DashboardVendeur() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [chargementCommandes, setChargementCommandes] = useState(true);
   const [majEnCours, setMajEnCours] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // ── Auth + redirection selon le role ────────────────────────
   useEffect(() => {
@@ -209,13 +210,37 @@ export default function DashboardVendeur() {
         .topbar-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; transition: all 0.15s; }
         .topbar-btn:hover { border-color: #15803d; background: #f0fdf4; }
         .thumb { width: 36px; height: 36px; border-radius: 9px; object-fit: cover; flex-shrink: 0; border: 1px solid #e5e7eb; }
+
+        .hamburger-btn { display: none; }
+        .sidebar-overlay { display: none; }
+
+        @media (max-width: 900px) {
+          .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none; }
+          .sidebar.sidebar-open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.12); }
+          .content-wrap { margin-left: 0 !important; }
+          .hamburger-btn { display: flex !important; }
+          .sidebar-overlay.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; }
+          .topbar-search { display: none !important; }
+          .profile-text { display: none !important; }
+          .publish-btn-label { display: none !important; }
+          .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+          .row { min-width: 640px; }
+          .commande-item { flex-wrap: wrap !important; }
+          .commande-actions { min-width: 100% !important; justify-content: flex-start !important; margin-top: 8px !important; }
+          .page-main { padding: 16px !important; }
+          .topbar-inner { padding: 0 12px !important; }
+        }
       `}</style>
 
+      {/* Overlay mobile quand la sidebar est ouverte */}
+      <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+
       {/* ── SIDEBAR ─────────────────────────────────────────────── */}
-      <aside style={{ width: 224, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
+      <aside className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{ width: 224, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
 
         {/* Logo */}
-        <div style={{ padding: "18px 18px 14px", borderBottom: "1px solid #f3f4f6" }}>
+        <div style={{ padding: "18px 18px 14px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 32, height: 32, background: "#15803d", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
@@ -228,6 +253,9 @@ export default function DashboardVendeur() {
               <span style={{ color: "#111827" }}>Market</span>
             </span>
           </a>
+          <button onClick={() => setSidebarOpen(false)} className="topbar-btn" style={{ display: sidebarOpen ? "flex" : "none" }} aria-label="Fermer le menu">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -236,7 +264,7 @@ export default function DashboardVendeur() {
             <div
               key={item.label}
               className={`nav-item${activeNav === item.label ? " active" : ""}`}
-              onClick={() => setActiveNav(item.label)}
+              onClick={() => { setActiveNav(item.label); setSidebarOpen(false); }}
               style={{ justifyContent: "space-between" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -291,13 +319,18 @@ export default function DashboardVendeur() {
       </aside>
 
       {/* ── CONTENU PRINCIPAL ───────────────────────────────────── */}
-      <div style={{ marginLeft: 224, flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="content-wrap" style={{ marginLeft: 224, flex: 1, display: "flex", flexDirection: "column" }}>
 
         {/* TOPBAR */}
-        <header style={{ height: 58, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 24px", gap: 12, position: "sticky", top: 0, zIndex: 50 }}>
+        <header className="topbar-inner" style={{ height: 58, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 24px", gap: 12, position: "sticky", top: 0, zIndex: 50 }}>
+
+          {/* Hamburger (mobile uniquement) */}
+          <button className="hamburger-btn topbar-btn" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          </button>
 
           {/* Recherche */}
-          <div style={{ flex: 1, maxWidth: 440, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 12px", gap: 8 }}>
+          <div className="topbar-search" style={{ flex: 1, maxWidth: 440, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 12px", gap: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input
               placeholder="Rechercher un produit, une commande..."
@@ -313,15 +346,15 @@ export default function DashboardVendeur() {
               style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Publier une annonce
+              <span className="publish-btn-label">Publier une annonce</span>
             </button>
 
             {/* Profil */}
             <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 11px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", background: "#fff" }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700 }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                 {initiales}
               </div>
-              <div>
+              <div className="profile-text">
                 <p style={{ fontSize: 12, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>{prenom}</p>
                 <p style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}>Vendeur vérifié</p>
               </div>
@@ -335,7 +368,7 @@ export default function DashboardVendeur() {
         </header>
 
         {/* PAGE */}
-        <main style={{ flex: 1, padding: "24px" }}>
+        <main className="page-main" style={{ flex: 1, padding: "24px" }}>
 
           {/* En-tête */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
@@ -348,7 +381,7 @@ export default function DashboardVendeur() {
           </div>
 
           {/* STATISTIQUES */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+          <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
             {STATS.map(s => (
               <div key={s.label} className="stat-card">
                 <div style={{ width: 42, height: 42, borderRadius: 11, background: s.fond, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -384,7 +417,7 @@ export default function DashboardVendeur() {
                 </div>
               ) : (
                 commandes.map(c => (
-                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
+                  <div key={c.id} className="commande-item" style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
                     {c.annonces?.photos && c.annonces.photos.length > 0 ? (
                       <img src={c.annonces.photos[0]} alt="" className="thumb" style={{ width: 44, height: 44 }} />
                     ) : (
@@ -393,7 +426,7 @@ export default function DashboardVendeur() {
                       </div>
                     )}
 
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 140 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: "#111827", marginBottom: 1 }}>{c.annonces?.titre || "Annonce supprimée"}</p>
                       <p style={{ fontSize: 11, color: "#9ca3af" }}>
                         Commandé par {c.acheteur_nom || "un étudiant"} · {tempsEcoule(c.created_at)}
@@ -404,7 +437,7 @@ export default function DashboardVendeur() {
                       {formatPrix(c.annonces?.prix_vente)} GHS
                     </span>
 
-                    <div style={{ flexShrink: 0, minWidth: 190, display: "flex", justifyContent: "flex-end" }}>
+                    <div className="commande-actions" style={{ flexShrink: 0, minWidth: 190, display: "flex", justifyContent: "flex-end" }}>
                       {c.statut === "en_attente" ? (
                         <div style={{ display: "flex", gap: 6 }}>
                           <button
@@ -456,7 +489,7 @@ export default function DashboardVendeur() {
                 </a>
               </div>
             ) : (
-              <>
+              <div className="table-scroll">
                 {/* En-têtes colonnes */}
                 <div className="row" style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb", padding: "9px 20px" }}>
                   {["Produit", "Prix", "Fair Price", "Vues", "Favoris", "Statut"].map(h => (
@@ -494,7 +527,7 @@ export default function DashboardVendeur() {
                     </span>
                   </div>
                 ))}
-              </>
+              </div>
             )}
 
             <div style={{ padding: "12px 20px", textAlign: "center", borderTop: "1px solid #f3f4f6" }}>

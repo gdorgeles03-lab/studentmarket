@@ -68,10 +68,20 @@ export default function CommandesPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "Inter, system-ui, sans-serif" }}>
-      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @media (max-width: 640px) {
+          .cmd-page-header { padding: 16px !important; }
+          .cmd-page-content { padding: 16px !important; }
+          .cmd-row { flex-wrap: wrap !important; }
+          .cmd-row-meta { width: 100% !important; display: flex !important; justify-content: space-between !important; align-items: center !important; margin-top: 8px !important; }
+          .cmd-actions { flex-wrap: wrap !important; }
+          .cmd-actions button { flex: 1 1 100% !important; }
+        }
+      `}</style>
 
       {/* HEADER */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="cmd-page-header" style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button onClick={() => router.back()} style={{ background: "transparent", border: "none", color: "#6b7280", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
             ← Retour
@@ -90,7 +100,7 @@ export default function CommandesPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 32px" }}>
+      <div className="cmd-page-content" style={{ maxWidth: 900, margin: "0 auto", padding: "24px 32px" }}>
 
         {commandes.length === 0 ? (
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "60px 24px", textAlign: "center" }}>
@@ -104,7 +114,7 @@ export default function CommandesPage() {
               const photo = c.annonces?.photos?.[0];
               return (
                 <div key={c.id} style={{ background: "#fff", border: `1.5px solid ${c.statut === "en_attente" ? "#FED7AA" : "#e5e7eb"}`, borderRadius: 14, padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: c.statut === "en_attente" ? 14 : 0 }}>
+                  <div className="cmd-row" style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: c.statut === "en_attente" ? 14 : 0 }}>
 
                     {/* Photo */}
                     <div style={{ width: 52, height: 52, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -115,7 +125,7 @@ export default function CommandesPage() {
                     </div>
 
                     {/* Infos */}
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 140 }}>
                       <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 3 }}>
                         {c.annonces?.titre || "Annonce supprimée"}
                       </p>
@@ -127,22 +137,22 @@ export default function CommandesPage() {
                       </p>
                     </div>
 
-                    {/* Prix */}
-                    {c.annonces?.prix_vente && (
-                      <p style={{ fontSize: 16, fontWeight: 800, color: "#15803d", flexShrink: 0 }}>
-                        {c.annonces.prix_vente.toLocaleString()} GHS
-                      </p>
-                    )}
-
-                    {/* Statut */}
-                    <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8, background: s.bg, color: s.color, flexShrink: 0 }}>
-                      {s.label}
-                    </span>
+                    {/* Prix + Statut (groupés pour passer ensemble à la ligne sur mobile) */}
+                    <div className="cmd-row-meta" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                      {c.annonces?.prix_vente && (
+                        <p style={{ fontSize: 16, fontWeight: 800, color: "#15803d" }}>
+                          {c.annonces.prix_vente.toLocaleString()} GHS
+                        </p>
+                      )}
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8, background: s.bg, color: s.color }}>
+                        {s.label}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Actions si en attente */}
                   {c.statut === "en_attente" && (
-                    <div style={{ display: "flex", gap: 10, paddingTop: 14, borderTop: "1px solid #f3f4f6" }}>
+                    <div className="cmd-actions" style={{ display: "flex", gap: 10, paddingTop: 14, borderTop: "1px solid #f3f4f6" }}>
                       <button
                         onClick={() => changerStatut(c.id, "confirmee")}
                         disabled={traitement === c.id}

@@ -187,11 +187,23 @@ export default function AnnoncesPage() {
   if (selected) {
     return (
       <main style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "Inter, system-ui, sans-serif" }}>
-        <style>{`* { box-sizing: border-box; margin: 0; padding: 0; } a { text-decoration: none; }`}</style>
+        <style>{`
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          a { text-decoration: none; }
+          @media (max-width: 768px) {
+            .detail-nav { padding: 0 16px !important; }
+            .detail-nav-link-text { display: none !important; }
+            .detail-container { padding: 20px 16px !important; }
+            .detail-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+            .detail-sidebar { position: static !important; top: auto !important; }
+            .detail-main-photo { height: 220px !important; }
+            .detail-details-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+          }
+        `}</style>
 
-        <nav style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", height: 58, display: "flex", alignItems: "center", padding: "0 40px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
+        <nav className="detail-nav" style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", height: 58, display: "flex", alignItems: "center", padding: "0 40px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 30, height: 30, background: "#15803d", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 30, height: 30, background: "#15803d", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
             </div>
             <span style={{ fontWeight: 900, fontSize: 17 }}>
@@ -199,22 +211,22 @@ export default function AnnoncesPage() {
             </span>
           </a>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <a href="/annonces" style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Marketplace</a>
-            <a href="/vendre" style={{ fontSize: 13, fontWeight: 600, background: "#15803d", color: "#fff", padding: "7px 14px", borderRadius: 8 }}>Publier une annonce</a>
+            <a href="/annonces" className="detail-nav-link-text" style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Marketplace</a>
+            <a href="/vendre" style={{ fontSize: 13, fontWeight: 600, background: "#15803d", color: "#fff", padding: "7px 14px", borderRadius: 8, whiteSpace: "nowrap" }}>Publier une annonce</a>
           </div>
         </nav>
 
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
+        <div className="detail-container" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
           <button onClick={() => setSelected(null)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7280", fontSize: 13, fontWeight: 500, marginBottom: 20, display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
             ← Retour aux annonces
           </button>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, alignItems: "start" }}>
+          <div className="detail-grid" style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, alignItems: "start" }}>
 
             {/* Gauche */}
             <div>
               {/* Photo principale */}
-              <div style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)", borderRadius: 16, height: 320, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12, border: "1px solid #e5e7eb", position: "relative", overflow: "hidden" }}>
+              <div className="detail-main-photo" style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)", borderRadius: 16, height: 320, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12, border: "1px solid #e5e7eb", position: "relative", overflow: "hidden" }}>
                 {selected.photos && selected.photos.length > 0 ? (
                   <img src={selected.photos[photoActive] || selected.photos[0]} alt={selected.titre} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
@@ -230,13 +242,13 @@ export default function AnnoncesPage() {
 
               {/* Miniatures */}
               {selected.photos && selected.photos.length > 1 && (
-                <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto" }}>
                   {selected.photos.slice(0, 5).map((p, i) => (
                     <div
                       key={i}
                       onClick={() => setPhotoActive(i)}
                       style={{
-                        width: 64, height: 64, borderRadius: 10, overflow: "hidden", cursor: "pointer",
+                        width: 64, height: 64, borderRadius: 10, overflow: "hidden", cursor: "pointer", flexShrink: 0,
                         border: photoActive === i ? "2px solid #15803d" : "1px solid #e5e7eb",
                         opacity: photoActive === i ? 1 : 0.75,
                         transition: "all 0.15s",
@@ -259,7 +271,7 @@ export default function AnnoncesPage() {
               {/* Détails */}
               <div style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", border: "1px solid #e5e7eb" }}>
                 <h3 style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 12 }}>Détails de l'annonce</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="detail-details-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {[
                     { label: "Catégorie", val: selected.categorie },
                     { label: "État", val: selected.etat },
@@ -278,7 +290,7 @@ export default function AnnoncesPage() {
             </div>
 
             {/* Droite */}
-            <div style={{ position: "sticky", top: 76 }}>
+            <div className="detail-sidebar" style={{ position: "sticky", top: 76 }}>
 
               {/* Prix */}
               <div style={{ background: "#fff", borderRadius: 14, padding: "20px", border: "1px solid #e5e7eb", marginBottom: 12 }}>
@@ -333,7 +345,7 @@ export default function AnnoncesPage() {
               <div style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", border: "1px solid #e5e7eb", marginBottom: 12 }}>
                 <h3 style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 12 }}>Informations vendeur</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 15, fontWeight: 700 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 15, fontWeight: 700, flexShrink: 0 }}>
                     {(selected.vendeur_nom || "E")[0].toUpperCase()}
                   </div>
                   <div>
@@ -377,12 +389,22 @@ export default function AnnoncesPage() {
         .cat-btn:hover:not(.active) { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
         .fav-btn { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.9); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
         .fav-btn:hover { background: #fff; transform: scale(1.1); }
+
+        @media (max-width: 768px) {
+          .list-nav { padding: 10px 16px !important; flex-wrap: wrap !important; row-gap: 10px !important; height: auto !important; }
+          .list-nav-search { margin: 0 !important; max-width: 100% !important; flex-basis: 100% !important; order: 3 !important; }
+          .list-publish-btn span { display: none !important; }
+          .list-hero { padding: 32px 20px 70px !important; }
+          .list-hero-title { font-size: 26px !important; }
+          .list-content { margin-top: -40px !important; padding: 0 16px 40px !important; }
+          .footer-badges { grid-template-columns: repeat(2,1fr) !important; }
+        }
       `}</style>
 
       {/* NAV */}
-      <nav style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", height: 58, display: "flex", alignItems: "center", padding: "0 40px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
+      <nav className="list-nav" style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", height: 58, display: "flex", alignItems: "center", padding: "0 40px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 30, height: 30, background: "#15803d", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 30, height: 30, background: "#15803d", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
           </div>
           <span style={{ fontWeight: 900, fontSize: 17 }}>
@@ -390,7 +412,7 @@ export default function AnnoncesPage() {
           </span>
         </a>
 
-        <div style={{ flex: 1, maxWidth: 480, margin: "0 32px" }}>
+        <div className="list-nav-search" style={{ flex: 1, maxWidth: 480, margin: "0 32px" }}>
           <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "0 14px", display: "flex", alignItems: "center", gap: 8 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input
@@ -404,17 +426,17 @@ export default function AnnoncesPage() {
         </div>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <a href="/vendre" style={{ fontSize: 13, fontWeight: 700, background: "#15803d", color: "#fff", padding: "8px 16px", borderRadius: 9, display: "flex", alignItems: "center", gap: 6 }}>
+          <a href="/vendre" className="list-publish-btn" style={{ fontSize: 13, fontWeight: 700, background: "#15803d", color: "#fff", padding: "8px 16px", borderRadius: 9, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Publier une annonce
+            <span>Publier une annonce</span>
           </a>
         </div>
       </nav>
 
       {/* HERO */}
-      <section style={{ background: "linear-gradient(135deg, #166534 0%, #15803d 100%)", padding: "48px 40px 100px" }}>
+      <section className="list-hero" style={{ background: "linear-gradient(135deg, #166534 0%, #15803d 100%)", padding: "48px 40px 100px" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", marginBottom: 8, letterSpacing: "-0.8px" }}>
+          <h1 className="list-hero-title" style={{ fontSize: 36, fontWeight: 900, color: "#fff", marginBottom: 8, letterSpacing: "-0.8px" }}>
             Marketplace étudiante
           </h1>
           <p style={{ fontSize: 15, color: "rgba(255,255,255,0.75)", marginBottom: 16 }}>
@@ -430,7 +452,7 @@ export default function AnnoncesPage() {
       </section>
 
       {/* CONTENU */}
-      <section style={{ maxWidth: 1100, margin: "-56px auto 0", padding: "0 32px 60px" }}>
+      <section className="list-content" style={{ maxWidth: 1100, margin: "-56px auto 0", padding: "0 32px 60px" }}>
 
         {/* Filtres */}
         <div style={{ background: "#fff", borderRadius: 16, padding: "16px 20px", marginBottom: 24, border: "1px solid #e5e7eb", boxShadow: "0 4px 20px rgba(15,23,42,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -448,7 +470,7 @@ export default function AnnoncesPage() {
         </div>
 
         {/* Titre section */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
           <div>
             <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>Annonces récentes</h2>
             <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>Découvrez les dernières annonces publiées par les étudiants.</p>
@@ -537,7 +559,7 @@ export default function AnnoncesPage() {
         )}
 
         {/* Footer badges */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 48, padding: "24px", background: "#fff", borderRadius: 14, border: "1px solid #e5e7eb" }}>
+        <div className="footer-badges" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 48, padding: "24px", background: "#fff", borderRadius: 14, border: "1px solid #e5e7eb" }}>
           {[
             { icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", label: "Transactions sécurisées" },
             { icon: "M20 6L9 17l-5-5", label: "Étudiants vérifiés" },

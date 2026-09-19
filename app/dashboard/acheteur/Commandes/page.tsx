@@ -53,6 +53,7 @@ export default function DashboardAcheteur() {
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [annulation, setAnnulation] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -137,11 +138,37 @@ export default function DashboardAcheteur() {
         .btn-secondary { background: #fff; color: #374151; border: 1.5px solid #e5e7eb; border-radius: 9px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
         .btn-danger { background: #fff; color: #DC2626; border: 1.5px solid #FECACA; border-radius: 9px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
         .btn-danger:hover { background: #FEF2F2; }
+
+        .hamburger-btn { display: none; }
+        .sidebar-overlay { display: none; }
+
+        @media (max-width: 900px) {
+          .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none; }
+          .sidebar.sidebar-open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.12); }
+          .content-wrap { margin-left: 0 !important; }
+          .hamburger-btn { display: flex !important; }
+          .sidebar-overlay.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; }
+          .topbar-search { display: none !important; }
+          .explore-btn-label { display: none !important; }
+          .profile-text { display: none !important; }
+          .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .page-main { padding: 16px !important; }
+          .topbar-inner { padding: 0 12px !important; }
+
+          .recent-cmd-row { flex-wrap: wrap !important; }
+          .recent-cmd-meta { width: 100% !important; display: flex !important; justify-content: space-between !important; margin-top: 8px !important; }
+
+          .cmd-header { flex-wrap: wrap !important; }
+          .cmd-price-block { width: 100% !important; text-align: left !important; margin-top: 10px !important; display: flex !important; justify-content: space-between !important; align-items: center !important; }
+        }
       `}</style>
 
+      {/* Overlay mobile */}
+      <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+
       {/* SIDEBAR */}
-      <aside style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6" }}>
+      <aside className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 34, height: 34, background: "#15803d", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
@@ -150,13 +177,16 @@ export default function DashboardAcheteur() {
               <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
             </span>
           </a>
+          <button onClick={() => setSidebarOpen(false)} className="topbar-btn" style={{ display: sidebarOpen ? "flex" : "none" }} aria-label="Fermer le menu">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
         </div>
 
         <nav style={{ flex: 1, padding: "12px" }}>
           {NAV.map(item => (
             <div key={item.label}
               className={`nav-item${activeNav === item.label ? " active" : ""}`}
-              onClick={() => setActiveNav(item.label)}
+              onClick={() => { setActiveNav(item.label); setSidebarOpen(false); }}
             >
               <Icon path={item.icon} size={17} color={activeNav === item.label ? "#15803d" : "#6b7280"} />
               <span style={{ flex: 1 }}>{item.label}</span>
@@ -185,11 +215,17 @@ export default function DashboardAcheteur() {
       </aside>
 
       {/* MAIN */}
-      <div style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="content-wrap" style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
 
         {/* TOPBAR */}
-        <header style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
-          <div style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 14px", gap: 8 }}>
+        <header className="topbar-inner" style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
+
+          {/* Hamburger (mobile uniquement) */}
+          <button className="hamburger-btn topbar-btn" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          </button>
+
+          <div className="topbar-search" style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 14px", gap: 8 }}>
             <Icon path="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" size={15} color="#9ca3af" />
             <input
               value={recherche}
@@ -202,13 +238,13 @@ export default function DashboardAcheteur() {
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => router.push("/annonces")} style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               <Icon path="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" size={14} color="#fff" />
-              Explorer la marketplace
+              <span className="explore-btn-label">Explorer la marketplace</span>
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid #e5e7eb", borderRadius: 10, background: "#fff" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700 }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                 {initiales}
               </div>
-              <div>
+              <div className="profile-text">
                 <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>{prenom}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <span style={{ fontSize: 11, color: "#6b7280" }}>Acheteur vérifié</span>
@@ -222,7 +258,7 @@ export default function DashboardAcheteur() {
           </div>
         </header>
 
-        <main style={{ flex: 1, padding: "28px" }}>
+        <main className="page-main" style={{ flex: 1, padding: "28px" }}>
 
           {/* ── DASHBOARD ── */}
           {activeNav === "Dashboard" && (
@@ -235,7 +271,7 @@ export default function DashboardAcheteur() {
               </div>
 
               {/* STATS */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+              <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
                   { label: "Commandes totales", value: String(stats.total), sub: `${stats.enAttente} en attente`, icon: "M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z M3 6h18", color: "#15803d", bg: "#f0fdf4" },
                   { label: "En attente", value: String(stats.enAttente), sub: "de confirmation vendeur", icon: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 6v6l4 2", color: "#d97706", bg: "#fffbeb" },
@@ -278,18 +314,20 @@ export default function DashboardAcheteur() {
                     const s = STATUTS[c.statut] || STATUTS.en_attente;
                     const photo = c.annonces?.photos?.[0];
                     return (
-                      <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
+                      <div key={c.id} className="recent-cmd-row" style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: "1px solid #f3f4f6" }}>
                         <div style={{ width: 44, height: 44, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon path="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8" size={20} color="#86efac" />}
                         </div>
-                        <div style={{ flex: 1 }}>
+                        <div style={{ flex: 1, minWidth: 140 }}>
                           <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{c.annonces?.titre || "Annonce"}</p>
                           <p style={{ fontSize: 12, color: "#9ca3af" }}>{new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}</p>
                         </div>
-                        <p style={{ fontSize: 15, fontWeight: 800, color: "#15803d" }}>{(c.annonces?.prix_vente || 0).toLocaleString()} GHS</p>
-                        <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-                          {s.label}
-                        </span>
+                        <div className="recent-cmd-meta" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <p style={{ fontSize: 15, fontWeight: 800, color: "#15803d" }}>{(c.annonces?.prix_vente || 0).toLocaleString()} GHS</p>
+                          <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                            {s.label}
+                          </span>
+                        </div>
                       </div>
                     );
                   })
@@ -301,7 +339,7 @@ export default function DashboardAcheteur() {
           {/* ── MES COMMANDES ── */}
           {activeNav === "Mes commandes" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 10 }}>
                 <div>
                   <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Mes commandes</h1>
                   <p style={{ fontSize: 14, color: "#9ca3af" }}>{commandes.length} commande{commandes.length > 1 ? "s" : ""} au total</p>
@@ -324,11 +362,11 @@ export default function DashboardAcheteur() {
                     const photo = c.annonces?.photos?.[0];
                     return (
                       <div key={c.id} className="cmd-card" style={{ borderColor: c.statut === "confirmee" ? "#86EFAC" : c.statut === "en_attente" ? "#FED7AA" : "#e5e7eb" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <div className="cmd-header" style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <div style={{ width: 56, height: 56, borderRadius: 12, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                             {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon path="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8" size={24} color="#86efac" />}
                           </div>
-                          <div style={{ flex: 1 }}>
+                          <div style={{ flex: 1, minWidth: 160 }}>
                             <p style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 3 }}>{c.annonces?.titre || "Annonce supprimée"}</p>
                             <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>
                               Vendeur : <strong>{c.annonces?.vendeur_nom || "—"}</strong> · {c.annonces?.ville || "—"}
@@ -337,7 +375,7 @@ export default function DashboardAcheteur() {
                               {new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
                             </p>
                           </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div className="cmd-price-block" style={{ textAlign: "right", flexShrink: 0 }}>
                             <p style={{ fontSize: 18, fontWeight: 900, color: "#15803d", marginBottom: 6 }}>
                               {(c.annonces?.prix_vente || 0).toLocaleString()} GHS
                             </p>
@@ -349,13 +387,13 @@ export default function DashboardAcheteur() {
 
                         {/* Actions selon statut */}
                         {(c.statut === "en_attente" || c.statut === "confirmee") && (
-                          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #f3f4f6", display: "flex", gap: 10 }}>
+                          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #f3f4f6", display: "flex", gap: 10, flexWrap: "wrap" }}>
                             {c.statut === "confirmee" && c.annonces?.telephone && (
                               <a
                                 href={"https://wa.me/" + (c.annonces?.telephone || "").replace(/^0/, "233") + "?text=" + encodeURIComponent("Bonjour, ma commande pour " + (c.annonces?.titre || "") + " a ete confirmee. Quand pouvons-nous nous retrouver ?")}
                                 target="_blank"
                                 rel="noreferrer"
-                                style={{ flex: 1, background: "#15803d", color: "#fff", textAlign: "center", fontWeight: 700, padding: "10px", borderRadius: 9, fontSize: 13, textDecoration: "none", display: "block" }}
+                                style={{ flex: 1, minWidth: 200, background: "#15803d", color: "#fff", textAlign: "center", fontWeight: 700, padding: "10px", borderRadius: 9, fontSize: 13, textDecoration: "none", display: "block" }}
                               >
                                 Contacter le vendeur via WhatsApp
                               </a>

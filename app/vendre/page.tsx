@@ -233,7 +233,7 @@ export default function VendrePage() {
 
   if (published) {
     return (
-      <main style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Inter', system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <main style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Inter', system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
         <div style={{ background: "#fff", borderRadius: "20px", padding: "56px 48px", maxWidth: "480px", width: "100%", textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" }}>
           <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#f0fdf4", border: "2px solid #86efac", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
@@ -269,11 +269,24 @@ export default function VendrePage() {
         .publish-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .top-navlink { text-decoration: none; color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 500; }
         .top-navlink:hover { color: #fff; }
-        .login-pill { text-decoration: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 13px; font-weight: 600; padding: 7px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); }
+        .login-pill { text-decoration: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 13px; font-weight: 600; padding: 7px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
+
+        @media (max-width: 900px) {
+          .top-nav { padding: 0 16px !important; }
+          .top-navlink { display: none !important; }
+          .page-header { padding: 20px 16px !important; }
+          .page-header h1 { font-size: 22px !important; }
+          .main-grid { grid-template-columns: 1fr !important; padding: 20px 16px !important; gap: 16px !important; }
+          .sidebar-col { position: static !important; top: auto !important; }
+          .section-block { padding: 18px !important; }
+          .form-grid-2 { grid-template-columns: 1fr !important; }
+          .form-grid-3 { grid-template-columns: 1fr !important; }
+          .photo-grid { grid-template-columns: repeat(3,1fr) !important; }
+        }
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ background: "#15803d", padding: "0 40px", height: "56px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
+      <nav className="top-nav" style={{ background: "#15803d", padding: "0 40px", height: "56px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
         <a href="/" style={{ textDecoration: "none", fontWeight: 900, fontSize: "20px" }}>
           <span style={{ color: "#fff" }}>Student</span><span style={{ color: "#86efac" }}>Market</span>
         </a>
@@ -285,13 +298,13 @@ export default function VendrePage() {
       </nav>
 
       {/* PAGE HEADER */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "24px 40px" }}>
+      <div className="page-header" style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "24px 40px" }}>
         <h1 style={{ fontSize: "26px", fontWeight: 900, color: "#111827", letterSpacing: "-0.5px", marginBottom: "4px" }}>Publier une annonce</h1>
         <p style={{ fontSize: "14px", color: "#6b7280" }}>Vendez vos appareils facilement aux etudiants</p>
       </div>
 
       {/* MAIN CONTENT */}
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 40px", display: "grid", gridTemplateColumns: "1fr 380px", gap: "24px", alignItems: "start" }}>
+      <div className="main-grid" style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 40px", display: "grid", gridTemplateColumns: "1fr 380px", gap: "24px", alignItems: "start" }}>
 
         {/* LEFT COLUMN */}
         <div>
@@ -302,7 +315,7 @@ export default function VendrePage() {
               <div className="section-num">1</div>
               <h2 style={{ fontSize: "16px", fontWeight: 800, color: "#111827" }}>Informations de base</h2>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+            <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
               <div>
                 <label style={lbl}>Categorie</label>
                 <select name="categorie" value={form.categorie} onChange={handleChange} style={inp}>
@@ -348,7 +361,7 @@ export default function VendrePage() {
             )}
 
             {photos.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "10px" }}>
+              <div className="photo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "10px" }}>
                 {photos.map((p, i) => (
                   <div key={i} className="photo-thumb">
                     <img src={p} alt="" />
@@ -373,7 +386,7 @@ export default function VendrePage() {
               <div className="section-num">3</div>
               <h2 style={{ fontSize: "16px", fontWeight: 800, color: "#111827" }}>Details et prix</h2>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
+            <div className="form-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
               <div>
                 <label style={lbl}>Prix d'achat (GHS)</label>
                 <input type="number" name="prixAchat" value={form.prixAchat} onChange={handleChange} placeholder="Ex: 2500" style={inp} />
@@ -398,7 +411,7 @@ export default function VendrePage() {
               <div className="section-num">4</div>
               <h2 style={{ fontSize: "16px", fontWeight: 800, color: "#111827" }}>Informations supplementaires</h2>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+            <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <div>
                 <label style={lbl}>Etat de l'appareil</label>
                 <select name="etat" value={form.etat} onChange={handleChange} style={inp}>
@@ -422,7 +435,7 @@ export default function VendrePage() {
         </div>
 
         {/* RIGHT COLUMN */}
-        <div style={{ position: "sticky", top: "80px" }}>
+        <div className="sidebar-col" style={{ position: "sticky", top: "80px" }}>
 
           {/* ESTIMATION */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "16px", padding: "24px", marginBottom: "14px" }}>

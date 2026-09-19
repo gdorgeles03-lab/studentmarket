@@ -227,6 +227,15 @@ export default function AuthPage() {
     }
   }
 
+  const mobileAuthStyles = `
+    @media (max-width: 480px) {
+      .auth-outer { padding: 16px !important; }
+      .auth-card { padding: 20px !important; }
+      .auth-tabs button { font-size: 13px !important; padding: 9px 4px !important; }
+      .otp-input { font-size: 20px !important; letter-spacing: 6px !important; padding: 12px 10px !important; }
+    }
+  `;
+
   // ÉCRAN — Vérification de session
   if (checkingSession) {
     return (
@@ -239,8 +248,9 @@ export default function AuthPage() {
   // ÉCRAN — Saisie du code OTP
   if (awaitingCode) {
     return (
-      <main style={styles.centeredPage}>
-        <section style={styles.card}>
+      <main className="auth-outer" style={styles.centeredPage}>
+        <style>{mobileAuthStyles}</style>
+        <section className="auth-card" style={styles.card}>
           <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: "1px solid #e5e7eb" }}>
             <p style={{ fontSize: "12px", fontWeight: 600, color: "#15803d", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "8px" }}>
               Vérification email
@@ -261,6 +271,7 @@ export default function AuthPage() {
               value={confirmationCode}
               onChange={(e) => setConfirmationCode(e.target.value.replace(/\D/g, ""))}
               placeholder="00000000"
+              className="otp-input"
               style={{
                 border: "1.5px solid #e5e7eb",
                 borderRadius: "10px",
@@ -310,8 +321,9 @@ export default function AuthPage() {
   // ÉCRAN — Email envoyé
   if (emailSent) {
     return (
-      <main style={styles.centeredPage}>
-        <section style={styles.card}>
+      <main className="auth-outer" style={styles.centeredPage}>
+        <style>{mobileAuthStyles}</style>
+        <section className="auth-card" style={styles.card}>
           <h1 style={styles.title}>Verifie ton email</h1>
           <p style={styles.mutedText}>Un lien de confirmation a ete envoye a :</p>
           <p style={styles.highlightText}>{form.email}</p>
@@ -336,9 +348,10 @@ export default function AuthPage() {
 
   // ÉCRAN — Formulaire principal
   return (
-    <main style={styles.page}>
-      <section style={styles.authPanel}>
-        <div style={styles.tabs}>
+    <main className="auth-outer" style={styles.page}>
+      <style>{mobileAuthStyles}</style>
+      <section className="auth-card" style={styles.authPanel}>
+        <div className="auth-tabs" style={styles.tabs}>
           <button
             type="button"
             onClick={() => { setMode("register"); setStep(1); }}

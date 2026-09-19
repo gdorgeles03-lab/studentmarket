@@ -106,6 +106,7 @@ export default function DashboardVendeur() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
   const [rechercheActive, setRechercheActive] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Analytics
   const [periodeAnalytics, setPeriodeAnalytics] = useState<Periode>("30j");
@@ -330,6 +331,37 @@ export default function DashboardVendeur() {
         .analytics-kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 20px; }
         .zone-bar { height: 8px; border-radius: 4px; background: #15803d; transition: width 0.5s; }
         .premium-badge { display: inline-flex; align-items: center; gap: 5px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+
+        .hamburger-btn { display: none; }
+        .sidebar-overlay { display: none; }
+
+        @media (max-width: 900px) {
+          .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none; }
+          .sidebar.sidebar-open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.12); }
+          .content-wrap { margin-left: 0 !important; }
+          .hamburger-btn { display: flex !important; }
+          .sidebar-overlay.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; }
+          .topbar-search { display: none !important; }
+          .publish-btn-label { display: none !important; }
+          .profile-text { display: none !important; }
+          .page-main { padding: 16px !important; }
+          .topbar-inner { padding: 0 12px !important; }
+
+          .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .dash-grid { grid-template-columns: 1fr !important; }
+          .products-grid { grid-template-columns: 1fr !important; }
+
+          .table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+          .mini-row { min-width: 560px !important; }
+
+          .analytics-header { flex-wrap: wrap !important; gap: 12px !important; }
+          .periode-selector { flex-wrap: wrap !important; width: 100% !important; }
+          .analytics-kpis { grid-template-columns: repeat(2,1fr) !important; }
+          .produits-zones-grid { grid-template-columns: 1fr !important; }
+          .audience-grid { grid-template-columns: 1fr !important; }
+          .premium-banner { flex-direction: column !important; align-items: flex-start !important; }
+          .premium-banner button { margin-left: 0 !important; margin-top: 14px !important; width: 100% !important; }
+        }
       `}</style>
 
       {/* MODAL SUPPRESSION */}
@@ -349,9 +381,12 @@ export default function DashboardVendeur() {
         </div>
       )}
 
+      {/* Overlay mobile */}
+      <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+
       {/* SIDEBAR */}
-      <aside style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6" }}>
+      <aside className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 34, height: 34, background: "#15803d", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
@@ -360,11 +395,29 @@ export default function DashboardVendeur() {
               <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
             </span>
           </a>
+          <button onClick={() => setSidebarOpen(false)} className="topbar-btn" style={{ display: sidebarOpen ? "flex" : "none" }} aria-label="Fermer le menu">
+            <Icon name="close" size={15} color="#111827" />
+          </button>
         </div>
         <nav style={{ flex: 1, padding: "12px" }}>
           {NAV_ITEMS.map(item => (
-            <div key={item.label} className={`nav-item${activeNav === item.label && !rechercheActive ? " active" : ""}`}
-              onClick={() => { setActiveNav(item.label); clearRecherche(); }}>
+            <div 
+            key={item.label} 
+            className={`nav-item${activeNav === item.label && !rechercheActive ? " active" : ""}`}
+            onClick={() => { 
+              if (item.label === "Analytics") {
+                setActiveNav("Analytics");
+                clearRecherche();
+              } else if (item.label === "Commandes") {
+                window.location.href = "/dashboard/vendeur/commandes";
+              } else if (item.label === "Messages") {
+                window.location.href = "/dashboard/vendeur/messages";
+              } else {
+                setActiveNav(item.label);
+                clearRecherche();
+                }
+              setSidebarOpen(false);
+              }}>
               <Icon name={item.icon} size={17} color={activeNav === item.label && !rechercheActive ? "#15803d" : "#6b7280"} />
               <span style={{ flex: 1 }}>{item.label}</span>
               {item.label === "Analytics" && (
@@ -393,11 +446,17 @@ export default function DashboardVendeur() {
       </aside>
 
       {/* MAIN */}
-      <div style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="content-wrap" style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
 
         {/* TOPBAR */}
-        <header style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
-          <div style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: `1.5px solid ${rechercheActive ? "#15803d" : "#e5e7eb"}`, borderRadius: 10, padding: "0 14px", gap: 8, transition: "border-color 0.2s" }}>
+        <header className="topbar-inner" style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
+
+          {/* Hamburger (mobile uniquement) */}
+          <button className="hamburger-btn topbar-btn" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          </button>
+
+          <div className="topbar-search" style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: `1.5px solid ${rechercheActive ? "#15803d" : "#e5e7eb"}`, borderRadius: 10, padding: "0 14px", gap: 8, transition: "border-color 0.2s" }}>
             <Icon name="search" size={15} color={rechercheActive ? "#15803d" : "#9ca3af"} />
             <input
               value={recherche}
@@ -413,12 +472,12 @@ export default function DashboardVendeur() {
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             <button style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }} onClick={() => router.push("/vendre")}>
-              <Icon name="plus" size={15} color="#fff" /> Publier une annonce
+              <Icon name="plus" size={15} color="#fff" /> <span className="publish-btn-label">Publier une annonce</span>
             </button>
             <div className="topbar-btn"><Icon name="bell" size={17} color="#6b7280" /></div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", background: "#fff" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700 }}>{initiales}</div>
-              <div>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{initiales}</div>
+              <div className="profile-text">
                 <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>{prenom}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <span style={{ fontSize: 11, color: "#6b7280" }}>Vendeur vérifié</span>
@@ -432,12 +491,12 @@ export default function DashboardVendeur() {
           </div>
         </header>
 
-        <main style={{ flex: 1, padding: "28px" }}>
+        <main className="page-main" style={{ flex: 1, padding: "28px" }}>
 
           {/* ── RÉSULTATS RECHERCHE ── */}
           {rechercheActive && (
             <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
                 <div>
                   <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", marginBottom: 4 }}>
                     Résultats pour "<span style={{ color: "#15803d" }}>{recherche}</span>"
@@ -460,7 +519,7 @@ export default function DashboardVendeur() {
                         <div style={{ width: 48, height: 48, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           {photo ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon name="box" size={20} color="#86efac" />}
                         </div>
-                        <div style={{ flex: 1 }}>
+                        <div style={{ flex: 1, minWidth: 140 }}>
                           <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
                           <p style={{ fontSize: 12, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
                         </div>
@@ -479,7 +538,7 @@ export default function DashboardVendeur() {
           {/* ── MES PRODUITS ── */}
           {!rechercheActive && activeNav === "Mes Produits" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 10 }}>
                 <div>
                   <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4 }}>Mes Produits</h1>
                   <p style={{ fontSize: 14, color: "#9ca3af" }}>{annonces.length} annonce{annonces.length > 1 ? "s" : ""} publiée{annonces.length > 1 ? "s" : ""}</p>
@@ -496,7 +555,7 @@ export default function DashboardVendeur() {
                   </button>
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                <div className="products-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {annonces.map(a => {
                     const photo = Array.isArray(a.photos) && a.photos.length > 0 ? a.photos[0] : null;
                     return (
@@ -527,15 +586,15 @@ export default function DashboardVendeur() {
           {!rechercheActive && activeNav === "Analytics" && (
             <div>
               {/* En-tête */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+              <div className="analytics-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
                 <div>
                   <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4, letterSpacing: "-0.4px" }}>Analytics</h1>
                   <p style={{ fontSize: 14, color: "#9ca3af" }}>Performance de vos ventes sur StudentMarket</p>
                 </div>
                 {/* Sélecteur période */}
-                <div style={{ display: "flex", gap: 6, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: "4px" }}>
+                <div className="periode-selector" style={{ display: "flex", gap: 6, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: "4px" }}>
                   {(["7j", "30j", "3m", "12m"] as Periode[]).map(p => (
-                    <button key={p} className={`periode-btn${periodeAnalytics === p ? " active" : ""}`} onClick={() => setPeriodeAnalytics(p)}>
+                    <button key={p} className={`periode-btn${periodeAnalytics === p ? " active" : ""}`} onClick={() => setPeriodeAnalytics(p)} style={{ flex: 1 }}>
                       {p === "7j" ? "7 jours" : p === "30j" ? "30 jours" : p === "3m" ? "3 mois" : "12 mois"}
                     </button>
                   ))}
@@ -543,7 +602,7 @@ export default function DashboardVendeur() {
               </div>
 
               {/* KPIs */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+              <div className="analytics-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
                 {[
                   { label: "Commandes reçues",  value: String(analyticsData.totalCommandes), sub: "sur la période", icon: "shopping", color: "#15803d",  bg: "#f0fdf4" },
                   { label: "Ventes finalisées", value: String(analyticsData.totalVentes),    sub: "transactions terminées", icon: "check",    color: "#1d4ed8",  bg: "#eff6ff" },
@@ -565,7 +624,7 @@ export default function DashboardVendeur() {
 
               {/* Graphique évolution */}
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px", marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>Évolution commandes & ventes</h2>
                     <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{analyticsData.totalCommandes} commandes · {analyticsData.totalVentes} ventes sur la période</p>
@@ -609,7 +668,7 @@ export default function DashboardVendeur() {
               </div>
 
               {/* Produits + Zones */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div className="produits-zones-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
 
                 {/* Top produits */}
                 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px" }}>
@@ -667,7 +726,7 @@ export default function DashboardVendeur() {
                   </div>
                   <Icon name="eye" size={16} color="#6b7280" />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+                <div className="audience-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
                   {[
                     { label: "Vues totales",    value: annonces.reduce((s, a) => s + (a.vues || 0), 0), color: "#1d4ed8" },
                     { label: "Favoris totaux",  value: annonces.reduce((s, a) => s + (a.favoris || 0), 0), color: "#dc2626" },
@@ -682,7 +741,7 @@ export default function DashboardVendeur() {
               </div>
 
               {/* Bannière Premium */}
-              <div style={{ background: "linear-gradient(135deg, #052e16 0%, #15803d 100%)", borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div className="premium-banner" style={{ background: "linear-gradient(135deg, #052e16 0%, #15803d 100%)", borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <Icon name="star" size={16} color="#fbbf24" />
@@ -716,7 +775,7 @@ export default function DashboardVendeur() {
                 <p style={{ fontSize: 14, color: "#9ca3af" }}>Voici ce qui se passe dans votre boutique aujourd'hui.</p>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+              <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
                   { label: "Revenus totaux",    value: `${totalRevenu.toLocaleString()} GHS`, sub: `${annonces.length} annonces au total`, icon: "wallet",   color: "#15803d", bg: "#f0fdf4" },
                   { label: "Produits actifs",   value: String(annonces.filter(a => !a.statut || a.statut === "actif").length), sub: `sur ${annonces.length} annonces`, icon: "box", color: "#7c3aed", bg: "#faf5ff" },
@@ -736,9 +795,9 @@ export default function DashboardVendeur() {
                 ))}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 16, marginBottom: 24 }}>
+              <div className="dash-grid" style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 16, marginBottom: 24 }}>
                 <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                     <div>
                       <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>Activité sur 30 jours</h2>
                       <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{totalCommandes30j} commandes · {totalVentes30j} ventes finalisées</p>
@@ -803,39 +862,41 @@ export default function DashboardVendeur() {
                   </div>
                   <button onClick={() => setActiveNav("Mes Produits")} style={{ fontSize: 13, color: "#15803d", fontWeight: 600, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Voir toutes →</button>
                 </div>
-                <div style={{ padding: "10px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 90px", gap: 12 }}>
-                  {["Produit", "Prix", "Fair Price", "Statut"].map(h => (
-                    <span key={h} style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</span>
-                  ))}
-                </div>
-                {annonces.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af", fontSize: 14 }}>Aucune annonce publiée.</div>
-                ) : annonces.slice(0, 5).map(a => {
-                  const photo = Array.isArray(a.photos) && a.photos.length > 0 ? a.photos[0] : null;
-                  return (
-                    <div key={a.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 90px", gap: 12, padding: "14px 20px", borderBottom: "1px solid #f3f4f6", alignItems: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {photo ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon name="box" size={18} color="#86efac" />}
+                <div className="table-scroll">
+                  <div className="mini-row" style={{ padding: "10px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 90px", gap: 12 }}>
+                    {["Produit", "Prix", "Fair Price", "Statut"].map(h => (
+                      <span key={h} style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</span>
+                    ))}
+                  </div>
+                  {annonces.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af", fontSize: 14 }}>Aucune annonce publiée.</div>
+                  ) : annonces.slice(0, 5).map(a => {
+                    const photo = Array.isArray(a.photos) && a.photos.length > 0 ? a.photos[0] : null;
+                    return (
+                      <div key={a.id} className="mini-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 90px", gap: 12, padding: "14px 20px", borderBottom: "1px solid #f3f4f6", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#f0fdf4", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {photo ? <img src={photo} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon name="box" size={18} color="#86efac" />}
+                          </div>
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
+                            <p style={{ fontSize: 11, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
-                          <p style={{ fontSize: 11, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, color: "#374151" }}>{(a.prix_achat || 0).toLocaleString()} GHS</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: a.score_prix === "bon" ? "#f0fdf4" : "#fffbeb", color: a.score_prix === "bon" ? "#15803d" : "#92400e" }}>
+                            {a.score_prix === "bon" ? "Bon" : "Élevé"}
+                          </span>
                         </div>
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 13, color: "#374151" }}>{(a.prix_achat || 0).toLocaleString()} GHS</span>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: a.score_prix === "bon" ? "#f0fdf4" : "#fffbeb", color: a.score_prix === "bon" ? "#15803d" : "#92400e" }}>
-                          {a.score_prix === "bon" ? "Bon" : "Élevé"}
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", display: "inline-block" }}>
+                          {a.statut ? a.statut.charAt(0).toUpperCase() + a.statut.slice(1) : "Actif"}
                         </span>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", display: "inline-block" }}>
-                        {a.statut ? a.statut.charAt(0).toUpperCase() + a.statut.slice(1) : "Actif"}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

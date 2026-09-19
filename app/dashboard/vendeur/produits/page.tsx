@@ -46,6 +46,7 @@ function Icon({ name, size = 18, color = "currentColor" }: { name: string; size?
     shield: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     bell: <svg viewBox="0 0 24 24" style={s} {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
     check: <svg viewBox="0 0 24 24" style={s} {...p}><polyline points="20 6 9 17 4 12"/></svg>,
+    close: <svg viewBox="0 0 24 24" style={s} {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   };
   return icons[name] || <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="12" cy="12" r="10"/></svg>;
 }
@@ -74,6 +75,7 @@ export default function MesProduits() {
   const [filtreCategorie, setFiltreCategorie] = useState("Toutes");
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -143,6 +145,26 @@ export default function MesProduits() {
         .topbar-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; transition: all 0.15s; }
         .topbar-btn:hover { border-color: #15803d; background: #f0fdf4; }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: center; justify-content: center; }
+
+        .hamburger-btn { display: none; }
+        .sidebar-overlay { display: none; }
+
+        @media (max-width: 900px) {
+          .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none; }
+          .sidebar.sidebar-open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.12); }
+          .content-wrap { margin-left: 0 !important; }
+          .hamburger-btn { display: flex !important; }
+          .sidebar-overlay.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; }
+          .topbar-search { display: none !important; }
+          .publish-btn-label { display: none !important; }
+          .profile-text { display: none !important; }
+          .page-main { padding: 16px !important; }
+          .topbar-inner { padding: 0 12px !important; }
+          .page-header { flex-wrap: wrap !important; gap: 12px !important; }
+
+          .quick-stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .products-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       {/* MODAL SUPPRESSION */}
@@ -166,9 +188,12 @@ export default function MesProduits() {
         </div>
       )}
 
+      {/* Overlay mobile */}
+      <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+
       {/* SIDEBAR */}
-      <aside style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6" }}>
+      <aside className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 34, height: 34, background: "#15803d", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
@@ -177,6 +202,9 @@ export default function MesProduits() {
               <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
             </span>
           </a>
+          <button onClick={() => setSidebarOpen(false)} className="topbar-btn" style={{ display: sidebarOpen ? "flex" : "none" }} aria-label="Fermer le menu">
+            <Icon name="close" size={15} color="#111827" />
+          </button>
         </div>
         <nav style={{ flex: 1, padding: "12px" }}>
           {NAV_ITEMS.map(item => (
@@ -209,11 +237,17 @@ export default function MesProduits() {
       </aside>
 
       {/* MAIN */}
-      <div style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="content-wrap" style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
 
         {/* TOPBAR */}
-        <header style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
-          <div style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 14px", gap: 8 }}>
+        <header className="topbar-inner" style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
+
+          {/* Hamburger (mobile uniquement) */}
+          <button className="hamburger-btn topbar-btn" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          </button>
+
+          <div className="topbar-search" style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 14px", gap: 8 }}>
             <Icon name="search" size={15} color="#9ca3af" />
             <input
               placeholder="Rechercher un produit..."
@@ -226,16 +260,16 @@ export default function MesProduits() {
             <button style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               onClick={() => router.push("/vendre")}>
               <Icon name="plus" size={15} color="#fff" />
-              Publier une annonce
+              <span className="publish-btn-label">Publier une annonce</span>
             </button>
             <div className="topbar-btn">
               <Icon name="bell" size={17} color="#6b7280" />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", background: "#fff" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700 }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                 {initiales}
               </div>
-              <div>
+              <div className="profile-text">
                 <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>{prenom}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <span style={{ fontSize: 11, color: "#6b7280" }}>Vendeur verifie</span>
@@ -249,10 +283,10 @@ export default function MesProduits() {
           </div>
         </header>
 
-        <main style={{ flex: 1, padding: "28px" }}>
+        <main className="page-main" style={{ flex: 1, padding: "28px" }}>
 
           {/* HEADER */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+          <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 900, color: "#111827", marginBottom: 4, letterSpacing: "-0.5px" }}>Mes Produits</h1>
               <p style={{ fontSize: 14, color: "#9ca3af" }}>{annonces.length} annonce{annonces.length > 1 ? "s" : ""} publiee{annonces.length > 1 ? "s" : ""} au total</p>
@@ -265,7 +299,7 @@ export default function MesProduits() {
           </div>
 
           {/* STATS RAPIDES */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+          <div className="quick-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
             {[
               { label: "Total annonces", value: annonces.length, color: "#15803d", bg: "#f0fdf4" },
               { label: "Actives", value: annonces.filter(a => (a.statut || "actif") === "actif").length, color: "#15803d", bg: "#f0fdf4" },
@@ -312,7 +346,7 @@ export default function MesProduits() {
               )}
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            <div className="products-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
               {annoncesFiltrees.map(a => {
                 const photoUrl = Array.isArray(a.photos) && a.photos.length > 0 ? a.photos[0] : null;
                 const statut = a.statut || "actif";

@@ -43,25 +43,38 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [toast, setToast] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [statsCategories, setStatsCategories] = useState<Record<string, number>>({});
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setActiveStep(s => (s + 1) % 3), 3000);
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", onScroll);
     onScroll();
-    supabase.from("annonces").select("*").order("created_at", { ascending: false }).limit(6).then(({ data }) => {
-      if (data) setAnnonces(data);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setUser(data.session.user);
-    });
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("welcome") === "true") {
-      setToast(true);
-      setTimeout(() => setToast(false), 3500);
-      window.history.replaceState({}, "", "/");
-    }
-    return () => { clearInterval(interval); window.removeEventListener("scroll", onScroll); };
+
+    supabase
+      .from("annonces")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(6)
+      .then(({ data }) => {
+        if (data) {
+          setAnnonces(data);
+
+          const stats: Record<string, number> = {};
+          (data as any[]).forEach((a: any) => {
+            if (a.categorie) {
+              stats[a.categorie] = (stats[a.categorie] || 0) + 1;
+            }
+          });
+          setStatsCategories(stats);
+        }
+      });
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   async function handleSignOut() {
@@ -128,12 +141,53 @@ export default function Home() {
         .user-menu-item:hover { background: #f0fdf4; color: #15803d; }
         .user-menu-item.danger { color: #dc2626; }
         .user-menu-item.danger:hover { background: #fef2f2; color: #dc2626; }
+
+        /* --- MOBILE NAV (hidden on desktop) --- */
+        .hamburger-btn { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: #fff; cursor: pointer; flex-shrink: 0; }
+        .mobile-search-btn { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: #fff; cursor: pointer; flex-shrink: 0; text-decoration: none; }
+        .mobile-drawer { position: fixed; top: 0; right: 0; width: min(300px, 85vw); height: 100vh; background: #fff; z-index: 500; box-shadow: -8px 0 32px rgba(0,0,0,0.14); padding: 20px; overflow-y: auto; }
+        .mobile-drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 490; }
+        .mobile-cat-link { display: flex; align-items: center; gap: 10px; text-decoration: none; font-size: 14px; font-weight: 600; color: #374151; padding: 12px 8px; border-bottom: 1px solid #f3f4f6; }
+
+        /* --- RESPONSIVE BREAKPOINT: MOBILE --- */
+        @media (max-width: 768px) {
+          .top-bar-text { font-size: 11px !important; }
+          .header-row { padding: 0 16px !important; gap: 10px !important; height: 60px !important; }
+          .search-wrap { display: none !important; }
+          .cat-nav-row { display: none !important; }
+          .desktop-only-nav { display: none !important; }
+          .hamburger-btn, .mobile-search-btn { display: flex !important; }
+          .logo-text { font-size: 19px !important; }
+
+          .hero-grid { grid-template-columns: 1fr !important; padding: 28px 20px 36px !important; gap: 28px !important; }
+          .hero-title { font-size: 30px !important; letter-spacing: -1px !important; }
+          .hero-media { min-height: 220px !important; order: -1 !important; }
+          .hero-float-card { display: none !important; }
+
+          .stats-row { flex-wrap: wrap !important; padding: 16px !important; }
+          .stat-item { width: 50% !important; padding: 12px 8px !important; border-right: none !important; border-bottom: 1px solid #f3f4f6 !important; }
+
+          .section-pad { padding-left: 20px !important; padding-right: 20px !important; }
+          .listings-grid { grid-template-columns: 1fr !important; }
+          .steps-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+          .testi-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+
+          .cta-box { padding: 40px 24px !important; }
+          .cta-title { font-size: 26px !important; }
+          .cta-buttons { flex-direction: column !important; }
+          .cta-buttons a { width: 100% !important; text-align: center !important; justify-content: center !important; }
+
+          .footer-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
+          .footer-bottom { flex-direction: column !important; gap: 8px !important; text-align: center !important; }
+
+          .float-cta { bottom: 16px !important; right: 16px !important; padding: 11px 16px !important; font-size: 12px !important; }
+        }
       `}</style>
 
       {/* TOP BAR */}
-      <div style={{ background: "#15803d", padding: "8px 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
+      <div style={{ background: "#15803d", padding: "8px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
         <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#86efac", animation: "pulse 2s infinite", flexShrink: 0 }} />
-        <p style={{ fontSize: "12px", color: "#fff", fontWeight: 600, margin: 0 }}>
+        <p className="top-bar-text" style={{ fontSize: "12px", color: "#fff", fontWeight: 600, margin: 0, textAlign: "center" }}>
           StudentMarket Ghana is live · 100% free for students ·{" "}
           <a href="/vendre" style={{ color: "#86efac", textDecoration: "underline" }}>Start selling today</a>
         </p>
@@ -141,13 +195,13 @@ export default function Home() {
 
       {/* STICKY HEADER */}
       <header style={{ position: "sticky", top: 0, zIndex: 200, background: "#fff", borderBottom: "1px solid #e5e7eb", boxShadow: scrolled ? "0 2px 12px rgba(0,0,0,0.07)" : "none", transition: "box-shadow 0.3s" }}>
-        <div style={{ padding: "0 40px", height: "64px", display: "flex", alignItems: "center", gap: "32px" }}>
+        <div className="header-row" style={{ padding: "0 40px", height: "64px", display: "flex", alignItems: "center", gap: "32px" }}>
           <a href="/" style={{ textDecoration: "none", fontWeight: 900, fontSize: "22px", letterSpacing: "-0.5px", flexShrink: 0 }}>
-            <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
+            <span className="logo-text" style={{ color: "#15803d" }}>Student</span><span className="logo-text" style={{ color: "#111827" }}>Market</span>
           </a>
 
-          {/* SEARCH BAR */}
-          <div style={{ flex: 1, maxWidth: "640px", display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: "10px", padding: "0 4px 0 16px", transition: "border-color 0.2s" }}
+          {/* SEARCH BAR (desktop) */}
+          <div className="search-wrap" style={{ flex: 1, maxWidth: "640px", display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: "10px", padding: "0 4px 0 16px", transition: "border-color 0.2s" }}
             onFocus={e => (e.currentTarget.style.borderColor = "#15803d")}
             onBlur={e => (e.currentTarget.style.borderColor = "#e5e7eb")}
           >
@@ -160,75 +214,86 @@ export default function Home() {
           </div>
 
           {/* RIGHT NAV */}
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-            {user ? (
-              <>
-                {/* USER DROPDOWN */}
-                <div style={{ position: "relative" }}>
-                  <button
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 14px", borderRadius: "9px", border: "1.5px solid #e5e7eb", background: "#fff", cursor: "pointer", fontFamily: "inherit", transition: "border-color 0.2s" }}
-                    onMouseOver={e => e.currentTarget.style.borderColor = "#bbf7d0"}
-                    onMouseOut={e => { if (!userMenuOpen) e.currentTarget.style.borderColor = "#e5e7eb"; }}
-                  >
-                    <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    </div>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#111827" }}>{firstName}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" style={{ transform: userMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, marginLeft: "auto" }}>
+            <a href="/annonces" className="mobile-search-btn" aria-label="Search">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+            </a>
 
-                  {/* DROPDOWN MENU */}
-                  {userMenuOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", border: "1px solid #e5e7eb", borderRadius: "14px", padding: "8px", minWidth: "220px", boxShadow: "0 8px 32px rgba(0,0,0,0.1)", zIndex: 300, animation: "fadeDown 0.18s ease forwards" }}>
-                      {/* USER INFO */}
-                      <div style={{ padding: "10px 12px 12px", borderBottom: "1px solid #f3f4f6", marginBottom: "6px" }}>
-                        <p style={{ fontSize: "13px", fontWeight: 700, color: "#111827", margin: "0 0 2px" }}>{fullName}</p>
-                        <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{user?.email}</p>
+            <div className="desktop-only-nav" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {user ? (
+                <>
+                  {/* USER DROPDOWN */}
+                  <div style={{ position: "relative" }}>
+                    <button
+                      onClick={() => setUserMenuOpen(!userMenuOpen)}
+                      style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 14px", borderRadius: "9px", border: "1.5px solid #e5e7eb", background: "#fff", cursor: "pointer", fontFamily: "inherit", transition: "border-color 0.2s" }}
+                      onMouseOver={e => e.currentTarget.style.borderColor = "#bbf7d0"}
+                      onMouseOut={e => { if (!userMenuOpen) e.currentTarget.style.borderColor = "#e5e7eb"; }}
+                    >
+                      <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       </div>
-                      {/* MENU ITEMS */}
-                      <a href={dashboardHref} className="user-menu-item">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                        Mon dashboard
-                      </a>
-                      <a href="/annonces" className="user-menu-item">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Mes annonces
-                      </a>
-                      <a href="/vendre" className="user-menu-item">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-                        Publier une annonce
-                      </a>
-                      <div style={{ borderTop: "1px solid #f3f4f6", margin: "6px 0" }} />
-                      <button className="user-menu-item danger" onClick={handleSignOut}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                        Se deconnecter
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <a href="/vendre" className="btn-primary" style={{ padding: "9px 18px", fontSize: "13px" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-                  Sell a Device
-                </a>
-              </>
-            ) : (
-              <>
-                <a href="/auth" className="nav-link" style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  Sign In
-                </a>
-                <a href="/vendre" className="btn-primary" style={{ padding: "9px 18px", fontSize: "13px" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-                  Sell a Device
-                </a>
-              </>
-            )}
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#111827" }}>{firstName}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" style={{ transform: userMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+
+                    {/* DROPDOWN MENU */}
+                    {userMenuOpen && (
+                      <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", border: "1px solid #e5e7eb", borderRadius: "14px", padding: "8px", minWidth: "220px", boxShadow: "0 8px 32px rgba(0,0,0,0.1)", zIndex: 300, animation: "fadeDown 0.18s ease forwards" }}>
+                        {/* USER INFO */}
+                        <div style={{ padding: "10px 12px 12px", borderBottom: "1px solid #f3f4f6", marginBottom: "6px" }}>
+                          <p style={{ fontSize: "13px", fontWeight: 700, color: "#111827", margin: "0 0 2px" }}>{fullName}</p>
+                          <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{user?.email}</p>
+                        </div>
+                        {/* MENU ITEMS */}
+                        <a href={dashboardHref} className="user-menu-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                          Mon dashboard
+                        </a>
+                        <a href="/annonces" className="user-menu-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          Mes annonces
+                        </a>
+                        <a href="/vendre" className="user-menu-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+                          Publier une annonce
+                        </a>
+                        <div style={{ borderTop: "1px solid #f3f4f6", margin: "6px 0" }} />
+                        <button className="user-menu-item danger" onClick={handleSignOut}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                          Se deconnecter
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <a href="/vendre" className="btn-primary" style={{ padding: "9px 18px", fontSize: "13px" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                    Sell a Device
+                  </a>
+                </>
+              ) : (
+                <>
+                  <a href="/auth" className="nav-link" style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Sign In
+                  </a>
+                  <a href="/vendre" className="btn-primary" style={{ padding: "9px 18px", fontSize: "13px" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                    Sell a Device
+                  </a>
+                </>
+              )}
+            </div>
+
+            {/* HAMBURGER (mobile only) */}
+            <button className="hamburger-btn" aria-label="Menu" onClick={() => setMobileMenuOpen(true)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+            </button>
           </div>
         </div>
 
-        {/* CATEGORY NAV */}
-        <div style={{ borderTop: "1px solid #f3f4f6", padding: "0 40px", display: "flex", alignItems: "center", gap: "4px", height: "44px" }}>
+        {/* CATEGORY NAV (desktop only) */}
+        <div className="cat-nav-row" style={{ borderTop: "1px solid #f3f4f6", padding: "0 40px", display: "flex", alignItems: "center", gap: "4px", height: "44px" }}>
           {NAV_CATS.map(cat => (
             <div key={cat.label} style={{ position: "relative" }} onMouseEnter={() => setHoveredCat(cat.label)} onMouseLeave={() => setHoveredCat(null)}>
               <div className={`cat-item${hoveredCat === cat.label ? " active" : ""}`}>
@@ -260,14 +325,56 @@ export default function Home() {
         </div>
       </header>
 
+      {/* MOBILE DRAWER */}
+      {mobileMenuOpen && (
+        <>
+          <div className="mobile-drawer-overlay" onClick={() => setMobileMenuOpen(false)} />
+          <div className="mobile-drawer">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
+              <span style={{ fontWeight: 900, fontSize: "18px" }}>
+                <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
+              </span>
+              <button onClick={() => setMobileMenuOpen(false)} aria-label="Fermer" style={{ background: "none", border: "none", cursor: "pointer", padding: "4px" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            {user ? (
+              <div style={{ marginBottom: "12px" }}>
+                <p style={{ fontSize: "13px", fontWeight: 700, color: "#111827", margin: "0 0 2px" }}>{fullName || firstName}</p>
+                <p style={{ fontSize: "11px", color: "#9ca3af", margin: "0 0 12px" }}>{user?.email}</p>
+                <a href={dashboardHref} className="user-menu-item" style={{ marginBottom: "4px" }}>Mon dashboard</a>
+                <a href="/annonces" className="user-menu-item" style={{ marginBottom: "4px" }}>Mes annonces</a>
+                <button className="user-menu-item danger" onClick={handleSignOut}>Se deconnecter</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                <a href="/auth" className="btn-outline" style={{ flex: 1, justifyContent: "center", padding: "10px" }}>Sign In</a>
+                <a href="/vendre" className="btn-primary" style={{ flex: 1, justifyContent: "center", padding: "10px" }}>Sell a Device</a>
+              </div>
+            )}
+
+            <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: "8px" }}>
+              <p style={{ fontSize: "10px", fontWeight: 700, color: "#9ca3af", letterSpacing: "1.5px", margin: "8px 0" }}>CATEGORIES</p>
+              {NAV_CATS.map(cat => (
+                <a key={cat.label} href="/annonces" className="mobile-cat-link">
+                  {cat.icon}
+                  {cat.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* HERO */}
-      <section style={{ background: "#fff", padding: "56px 40px 48px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", alignItems: "center", borderBottom: "1px solid #e5e7eb", overflow: "hidden" }}>
+      <section className="hero-grid" style={{ background: "#fff", padding: "56px 40px 48px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", alignItems: "center", borderBottom: "1px solid #e5e7eb", overflow: "hidden" }}>
         <div>
           <div className="anim-1" style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "100px", padding: "5px 14px", marginBottom: "22px" }}>
             <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#15803d", animation: "pulse 2s infinite" }} />
             <span style={{ fontSize: "11px", color: "#15803d", fontWeight: 700, letterSpacing: "1.2px" }}>STUDENT MARKETPLACE — GHANA</span>
           </div>
-          <h1 className="anim-2" style={{ fontSize: "48px", fontWeight: 900, color: "#111827", lineHeight: 1.08, letterSpacing: "-2px", marginBottom: "16px" }}>
+          <h1 className="anim-2 hero-title" style={{ fontSize: "48px", fontWeight: 900, color: "#111827", lineHeight: 1.08, letterSpacing: "-2px", marginBottom: "16px" }}>
             Achetez et revendez<br />vos <span style={{ color: "#15803d" }}>appareils etudiants</span><br />en toute confiance
           </h1>
           <p className="anim-3" style={{ fontSize: "15px", color: "#6b7280", lineHeight: 1.8, marginBottom: "28px", maxWidth: "420px" }}>
@@ -298,9 +405,9 @@ export default function Home() {
         </div>
 
         {/* RIGHT */}
-        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", minHeight: "420px" }}>
-          <div style={{ position: "absolute", width: "440px", height: "440px", borderRadius: "50%", background: "radial-gradient(circle, #dcfce7 0%, #f0fdf4 60%, transparent 100%)", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 0 }} />
-          <img src="/hero-student.png" alt="Student" style={{ position: "relative", zIndex: 1, height: "400px", width: "auto", objectFit: "contain" }} />
+        <div className="hero-media" style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", minHeight: "420px" }}>
+          <div style={{ position: "absolute", width: "440px", height: "440px", maxWidth: "100%", borderRadius: "50%", background: "radial-gradient(circle, #dcfce7 0%, #f0fdf4 60%, transparent 100%)", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 0 }} />
+          <img src="/hero-student.png" alt="Student" style={{ position: "relative", zIndex: 1, height: "400px", maxHeight: "100%", width: "auto", objectFit: "contain" }} />
           <div className="hero-float-card" style={{ top: "20px", right: "0px", padding: "16px 20px", minWidth: "200px" }}>
             <p style={{ fontSize: "11px", color: "#9ca3af", margin: "0 0 4px", fontWeight: 500 }}>Estimation IA</p>
             <p style={{ fontSize: "20px", fontWeight: 900, color: "#15803d", margin: "0 0 8px", letterSpacing: "-0.5px" }}>GHS 1,250 - 1,450</p>
@@ -317,14 +424,14 @@ export default function Home() {
       </section>
 
       {/* STATS */}
-      <section style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "28px 40px", display: "flex", justifyContent: "center" }}>
+      <section className="stats-row" style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "28px 40px", display: "flex", justifyContent: "center" }}>
         {[
           { value: "120+", en: "Active Listings", fr: "Annonces actives" },
           { value: "85+", en: "Verified Students", fr: "Etudiants verifies" },
           { value: "98%", en: "AI Accuracy", fr: "Precision IA" },
           { value: "MoMo", en: "Payment Accepted", fr: "Paiement accepte" },
         ].map((s, i) => (
-          <div key={s.en} style={{ textAlign: "center", padding: "0 48px", borderRight: i < 3 ? "1px solid #f3f4f6" : "none" }}>
+          <div key={s.en} className="stat-item" style={{ textAlign: "center", padding: "0 48px", borderRight: i < 3 ? "1px solid #f3f4f6" : "none" }}>
             <p style={{ fontSize: "24px", fontWeight: 900, color: "#15803d", margin: "0 0 3px", letterSpacing: "-0.8px" }}>{s.value}</p>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "#111827", margin: "0 0 1px" }}>{s.en}</p>
             <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{s.fr}</p>
@@ -334,7 +441,7 @@ export default function Home() {
 
       {/* CATEGORIES CAROUSEL */}
       <section style={{ padding: "48px 0", background: "#fff", borderBottom: "1px solid #e5e7eb", overflow: "hidden" }}>
-        <div style={{ padding: "0 40px", marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="section-pad" style={{ padding: "0 40px", marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ fontSize: "18px", fontWeight: 800, color: "#111827" }}>Shop by Category</h2>
           <a href="/annonces" style={{ textDecoration: "none", fontSize: "13px", color: "#15803d", fontWeight: 600 }}>View all →</a>
         </div>
@@ -358,7 +465,7 @@ export default function Home() {
       </section>
 
       {/* LATEST LISTINGS */}
-      <section style={{ padding: "48px 40px", background: "#f9fafb" }}>
+      <section className="section-pad" style={{ padding: "48px 40px", background: "#f9fafb" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
             <div>
@@ -374,13 +481,17 @@ export default function Home() {
               <a href="/vendre" className="btn-primary" style={{ padding: "10px 22px" }}>Publish a listing</a>
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
+            <div className="listings-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
               {annonces.map(a => (
                 <a key={a.id} href="/annonces" className="listing-card">
-                  <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", height: "148px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="1.4">
-                      {a.categorie === "Smartphone" ? <><rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="#15803d"/></> : a.categorie === "Laptop" ? <><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M1 20h22"/></> : <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></>}
-                    </svg>
+                  <div style={{ height: "200px", position: "relative", overflow: "hidden", background: "linear-gradient(135deg,#f0fdf4,#dcfce7)" }}>
+                    {Array.isArray(a.photos) && a.photos.length > 0 ? (
+                      <img src={a.photos[0]} alt={a.titre} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block", transition: "transform 0.3s ease" }} />
+                    ) : (
+                      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="1.4">
+                        {a.categorie === "Smartphone" ? <><rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="#15803d"/></> : a.categorie === "Laptop" ? <><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M1 20h22"/></> : <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></>}
+                      </svg>
+                    )}
                     <div style={{ position: "absolute", top: "10px", left: "10px", background: a.score_prix === "bon" ? "#15803d" : "#d97706", color: "#fff", fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "5px" }}>
                       {a.score_prix === "bon" ? "AI Verified" : "Check Price"}
                     </div>
@@ -394,22 +505,22 @@ export default function Home() {
                     </div>
                     <p style={{ fontSize: "11px", color: "#6b7280", margin: "6px 0 0" }}>{a.vendeur_nom} · {a.universite}</p>
                   </div>
-                </a>
-              ))}
-            </div>
-          )}
+                  </a>
+                ))}
+        </div>
+        )}
         </div>
       </section>
 
       {/* HOW IT WORKS */}
-      <section style={{ padding: "64px 40px", background: "#fff" }}>
+      <section className="section-pad" style={{ padding: "64px 40px", background: "#fff" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "40px" }}>
             <p style={{ fontSize: "10px", color: "#15803d", fontWeight: 700, letterSpacing: "2px", marginBottom: "8px" }}>HOW IT WORKS · COMMENT CA MARCHE</p>
             <h2 style={{ fontSize: "28px", fontWeight: 900, color: "#111827", letterSpacing: "-0.8px", marginBottom: "8px" }}>Simple. Fast. Secure.</h2>
             <p style={{ fontSize: "14px", color: "#6b7280", maxWidth: "340px", margin: "0 auto", lineHeight: 1.7 }}>Sell your device in 3 steps and get paid directly.</p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "18px" }}>
+          <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "18px" }}>
             {STEPS.map((item, i) => (
               <div key={item.num} className={`step-card${activeStep === i ? " active" : ""}`} onClick={() => setActiveStep(i)}>
                 <div style={{ overflow: "hidden", height: "180px", position: "relative" }}>
@@ -429,13 +540,13 @@ export default function Home() {
       </section>
 
       {/* TESTIMONIALS */}
-      <section style={{ padding: "64px 40px", background: "#f9fafb" }}>
+      <section className="section-pad" style={{ padding: "64px 40px", background: "#f9fafb" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "40px" }}>
             <p style={{ fontSize: "10px", color: "#15803d", fontWeight: 700, letterSpacing: "2px", marginBottom: "8px" }}>REVIEWS · TEMOIGNAGES</p>
             <h2 style={{ fontSize: "28px", fontWeight: 900, color: "#111827", letterSpacing: "-0.8px" }}>What students say</h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "18px" }}>
+          <div className="testi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "18px" }}>
             {TESTIMONIALS.map(t => (
               <div key={t.name} className="tcard">
                 <div style={{ display: "flex", gap: "3px", marginBottom: "14px" }}>
@@ -455,7 +566,7 @@ export default function Home() {
       </section>
 
       {/* UNIVERSITIES */}
-      <section style={{ padding: "40px", background: "#fff", borderTop: "1px solid #f3f4f6", textAlign: "center" }}>
+      <section className="section-pad" style={{ padding: "40px", background: "#fff", borderTop: "1px solid #f3f4f6", textAlign: "center" }}>
         <p style={{ fontSize: "10px", color: "#9ca3af", fontWeight: 700, letterSpacing: "2px", marginBottom: "24px" }}>TRUSTED BY STUDENTS FROM · PRESENTE DANS</p>
         <div style={{ display: "flex", justifyContent: "center", gap: "48px", flexWrap: "wrap" }}>
           {["KNUST", "UG LEGON", "ASHESI", "GIMPA", "UCC"].map(u => (
@@ -465,29 +576,29 @@ export default function Home() {
       </section>
 
       {/* CTA */}
-      <section style={{ padding: "64px 40px", background: "#f9fafb" }}>
-        <div style={{ maxWidth: "800px", margin: "0 auto", background: "linear-gradient(135deg, #052e16 0%, #15803d 100%)", borderRadius: "20px", padding: "64px 56px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+      <section className="section-pad" style={{ padding: "64px 40px", background: "#f9fafb" }}>
+        <div className="cta-box" style={{ maxWidth: "800px", margin: "0 auto", background: "linear-gradient(135deg, #052e16 0%, #15803d 100%)", borderRadius: "20px", padding: "64px 56px", textAlign: "center", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "180px", height: "180px", borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
           <p style={{ fontSize: "10px", color: "#86efac", fontWeight: 700, letterSpacing: "2px", marginBottom: "12px", position: "relative" }}>START SELLING TODAY</p>
-          <h2 style={{ fontSize: "34px", fontWeight: 900, color: "#fff", marginBottom: "12px", letterSpacing: "-1.2px", position: "relative" }}>
+          <h2 className="cta-title" style={{ fontSize: "34px", fontWeight: 900, color: "#fff", marginBottom: "12px", letterSpacing: "-1.2px", position: "relative" }}>
             Ready to sell your device?<br /><span style={{ color: "#4ade80" }}>Pret a vendre ?</span>
           </h2>
           <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", marginBottom: "32px", maxWidth: "380px", margin: "0 auto 32px", lineHeight: 1.8, position: "relative" }}>
             Publish your listing in under 2 minutes and reach thousands of students across Ghana.
           </p>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "center", position: "relative" }}>
-            <a href="/vendre" style={{ textDecoration: "none", background: "#4ade80", color: "#000", fontWeight: 800, padding: "12px 28px", borderRadius: "8px", fontSize: "14px", display: "inline-block", transition: "all 0.2s" }}
+          <div className="cta-buttons" style={{ display: "flex", gap: "10px", justifyContent: "center", position: "relative" }}>
+            <a href="/vendre" style={{ textDecoration: "none", background: "#4ade80", color: "#000", fontWeight: 800, padding: "12px 28px", borderRadius: "8px", fontSize: "14px", display: "inline-flex", alignItems: "center", transition: "all 0.2s" }}
               onMouseOver={e => e.currentTarget.style.background = "#86efac"}
               onMouseOut={e => e.currentTarget.style.background = "#4ade80"}
             >Start Selling</a>
-            <a href="/annonces" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 600, padding: "12px 28px", borderRadius: "8px", fontSize: "14px", border: "1.5px solid rgba(255,255,255,0.2)", display: "inline-block" }}>Browse Listings</a>
+            <a href="/annonces" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", fontWeight: 600, padding: "12px 28px", borderRadius: "8px", fontSize: "14px", border: "1.5px solid rgba(255,255,255,0.2)", display: "inline-flex", alignItems: "center" }}>Browse Listings</a>
           </div>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer style={{ borderTop: "1px solid #e5e7eb", padding: "48px 40px 32px", background: "#fff" }}>
-        <div style={{ maxWidth: "1100px", margin: "0 auto", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "40px", marginBottom: "32px" }}>
+      <footer className="section-pad" style={{ borderTop: "1px solid #e5e7eb", padding: "48px 40px 32px", background: "#fff" }}>
+        <div className="footer-grid" style={{ maxWidth: "1100px", margin: "0 auto", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "40px", marginBottom: "32px" }}>
           <div>
             <span style={{ fontWeight: 900, fontSize: "20px", letterSpacing: "-0.5px", display: "block", marginBottom: "10px" }}>
               <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
@@ -510,7 +621,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <div style={{ maxWidth: "1100px", margin: "0 auto", paddingTop: "20px", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="footer-bottom" style={{ maxWidth: "1100px", margin: "0 auto", paddingTop: "20px", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <p style={{ fontSize: "12px", color: "#9ca3af" }}>2025 StudentMarket Ghana. All rights reserved.</p>
           <p style={{ fontSize: "12px", color: "#9ca3af" }}>KNUST · UG Legon · Ashesi · GIMPA · UCC</p>
         </div>

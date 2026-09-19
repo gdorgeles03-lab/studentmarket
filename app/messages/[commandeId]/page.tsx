@@ -191,34 +191,41 @@ export default function ConversationPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "Inter, system-ui, sans-serif", display: "flex", flexDirection: "column" }}>
-      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @media (max-width: 480px) {
+          .conv-header { padding: 12px 14px !important; gap: 8px !important; }
+          .conv-messages { padding: 16px 14px !important; }
+          .conv-input-wrap { padding: 12px 14px !important; }
+        }
+      `}</style>
 
       {/* HEADER */}
-      <header style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "14px 24px", display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, zIndex: 10 }}>
-        <button onClick={() => router.back()} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+      <header className="conv-header" style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "14px 24px", display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, zIndex: 10 }}>
+        <button onClick={() => router.back()} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         </button>
 
         {commande.annonces?.photos && commande.annonces.photos.length > 0 ? (
-          <img src={commande.annonces.photos[0]} alt="" style={{ width: 40, height: 40, borderRadius: 9, objectFit: "cover", border: "1px solid #e5e7eb" }} />
+          <img src={commande.annonces.photos[0]} alt="" style={{ width: 40, height: 40, borderRadius: 9, objectFit: "cover", border: "1px solid #e5e7eb", flexShrink: 0 }} />
         ) : (
-          <div style={{ width: 40, height: 40, borderRadius: 9, background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 9, background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8l-2 4h12z"/></svg>
           </div>
         )}
 
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{nomInterlocuteur}</p>
-          <p style={{ fontSize: 12, color: "#9ca3af" }}>{commande.annonces?.titre} · {commande.annonces?.prix_vente} GHS</p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nomInterlocuteur}</p>
+          <p style={{ fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{commande.annonces?.titre} · {commande.annonces?.prix_vente} GHS</p>
         </div>
 
-        <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", flexShrink: 0, whiteSpace: "nowrap" }}>
           Confirmée
         </span>
       </header>
 
       {/* MESSAGES */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10, maxWidth: 720, width: "100%", margin: "0 auto" }}>
+      <div className="conv-messages" style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10, maxWidth: 720, width: "100%", margin: "0 auto" }}>
         {messages.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 0" }}>
             <p style={{ fontSize: 13, color: "#9ca3af" }}>Aucun message pour l'instant. Convenez ensemble du lieu et de l'heure de remise.</p>
@@ -229,7 +236,7 @@ export default function ConversationPage() {
             return (
               <div key={m.id} style={{ display: "flex", justifyContent: estMoi ? "flex-end" : "flex-start" }}>
                 <div style={{
-                  maxWidth: "70%", padding: "10px 14px", borderRadius: 14,
+                  maxWidth: "80%", padding: "10px 14px", borderRadius: 14,
                   background: estMoi ? "#15803d" : "#fff",
                   color: estMoi ? "#fff" : "#111827",
                   border: estMoi ? "none" : "1px solid #e5e7eb",
@@ -247,7 +254,7 @@ export default function ConversationPage() {
       </div>
 
       {/* SAISIE */}
-      <div style={{ background: "#fff", borderTop: "1px solid #e5e7eb", padding: "14px 24px" }}>
+      <div className="conv-input-wrap" style={{ background: "#fff", borderTop: "1px solid #e5e7eb", padding: "14px 24px" }}>
         <div style={{ display: "flex", gap: 10, maxWidth: 720, margin: "0 auto" }}>
           <input
             value={texte}
@@ -259,7 +266,7 @@ export default function ConversationPage() {
           <button
             onClick={envoyerMessage}
             disabled={envoi || !texte.trim()}
-            style={{ background: "#15803d", color: "#fff", border: "none", borderRadius: 10, padding: "0 20px", fontSize: 13, fontWeight: 700, cursor: envoi || !texte.trim() ? "not-allowed" : "pointer", opacity: envoi || !texte.trim() ? 0.6 : 1 }}
+            style={{ background: "#15803d", color: "#fff", border: "none", borderRadius: 10, padding: "0 20px", fontSize: 13, fontWeight: 700, cursor: envoi || !texte.trim() ? "not-allowed" : "pointer", opacity: envoi || !texte.trim() ? 0.6 : 1, flexShrink: 0 }}
           >
             Envoyer
           </button>
