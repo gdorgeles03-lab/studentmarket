@@ -389,6 +389,11 @@ export default function AnnoncesPage() {
         .cat-btn:hover:not(.active) { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
         .fav-btn { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.9); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
         .fav-btn:hover { background: #fff; transform: scale(1.1); }
+        
+        @media (max-width: 640px) {
+          .listings-grid-mobile { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+          .listings-grid-mobile .card > div:first-child { height: 120px !important; }
+        }
 
         @media (max-width: 768px) {
           .list-nav { padding: 10px 16px !important; flex-wrap: wrap !important; row-gap: 10px !important; height: auto !important; }
@@ -500,7 +505,7 @@ export default function AnnoncesPage() {
             </a>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+          <div className="listings-grid-mobile" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
             {annoncesFiltrees.map(annonce => (
               <div key={annonce.id} className="card" onClick={() => ouvrirAnnonce(annonce)}>
 
