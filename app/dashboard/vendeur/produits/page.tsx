@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import { formatPrix } from "@/lib/format";
 
 type Annonce = {
   id: string;
@@ -19,6 +20,11 @@ type Annonce = {
   statut?: string;
   photos?: string[];
   description?: string;
+};
+
+type Analyse = {
+  type: "prix" | "visibilite" | "info";
+  message: string;
 };
 
 function Icon({ name, size = 18, color = "currentColor" }: { name: string; size?: number; color?: string }) {
@@ -56,7 +62,6 @@ const NAV_ITEMS = [
   { label: "Mes Produits", href: "/dashboard/vendeur/produits", icon: "box" },
   { label: "Commandes", href: "/dashboard/vendeur/commandes", icon: "shopping", badge: 12 },
   { label: "Messages", href: "/dashboard/vendeur/messages", icon: "message", badge: 5 },
-  { label: "Analytics", href: "/dashboard/vendeur/analytics", icon: "chart" },
   { label: "Promotions", href: "/dashboard/vendeur/promotions", icon: "tag" },
   { label: "Wallet", href: "/dashboard/vendeur/wallet", icon: "wallet" },
   { label: "Avis Clients", href: "/dashboard/vendeur/avis", icon: "star" },
@@ -75,7 +80,7 @@ export default function MesProduits() {
   const [filtreCategorie, setFiltreCategorie] = useState("Toutes");
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [analyses, setAnalyses] = useState<Record<string, Analyse>>({});
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -86,10 +91,69 @@ export default function MesProduits() {
         .select("*")
         .eq("vendeur_id", session.user.id)
         .order("created_at", { ascending: false });
-      if (data) setAnnonces(data);
+      if (data) {
+        setAnnonces(data);
+        analyserAnnoncesStagnantes(data);
+      }
       setLoading(false);
     });
   }, [router]);
+
+  async function analyserAnnoncesStagnantes(liste: Annonce[]) {
+    const SOIXANTE_JOURS = 60 * 24 * 60 * 60 * 1000;
+    const stagnantes = liste.filter(a =>
+      (a.statut || "actif") === "actif" &&
+      a.created_at &&
+      Date.now() - new Date(a.created_at).getTime() > SOIXANTE_JOURS
+    );
+
+    if (stagnantes.length === 0) return;
+
+    const resultats: Record<string, Analyse> = {};
+
+    await Promise.all(stagnantes.map(async (a) => {
+      const { data: comparables } = await supabase
+        .from("annonces")
+        .select("prix_vente, vues")
+        .eq("categorie", a.categorie)
+        .eq("ville", a.ville)
+        .eq("statut", "actif")
+        .neq("id", a.id);
+
+      if (!comparables || comparables.length === 0) {
+        resultats[a.id] = {
+          type: "info",
+          message: "Invendue depuis plus de 60 jours. Aucune annonce similaire dans votre ville pour comparer — un petit rabais pourrait relancer l'intérêt.",
+        };
+        return;
+      }
+
+      const avgPrix = comparables.reduce((s, c) => s + (c.prix_vente || 0), 0) / comparables.length;
+      const avgVues = comparables.reduce((s, c) => s + (c.vues || 0), 0) / comparables.length;
+
+      const prixTropHaut = avgPrix > 0 && (a.prix_vente || 0) > avgPrix * 1.15;
+      const visibiliteFaible = (a.vues || 0) < Math.max(avgVues * 0.5, 5);
+
+      if (prixTropHaut) {
+        resultats[a.id] = {
+          type: "prix",
+          message: `Invendue depuis 60+ jours. Le prix moyen des annonces similaires dans votre ville est de ${Math.round(avgPrix).toLocaleString()} GHS — envisagez de baisser le vôtre.`,
+        };
+      } else if (visibiliteFaible) {
+        resultats[a.id] = {
+          type: "visibilite",
+          message: "Invendue depuis 60+ jours et peu vue. Vérifiez le titre, la catégorie et les photos — l'annonce est peut-être difficile à trouver.",
+        };
+      } else {
+        resultats[a.id] = {
+          type: "info",
+          message: "Invendue depuis 60+ jours malgré un bon nombre de vues. Un petit rabais pourrait convaincre les acheteurs hésitants.",
+        };
+      }
+    }));
+
+    setAnalyses(resultats);
+  }
 
   async function supprimerAnnonce(id: string) {
     const { error } = await supabase.from("annonces").delete().eq("id", id);
@@ -120,53 +184,7 @@ export default function MesProduits() {
   );
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f9fafb", fontFamily: "Inter, system-ui, sans-serif", color: "#111827" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        a { text-decoration: none; color: inherit; }
-        .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 500; color: #6b7280; }
-        .nav-item:hover { background: #f3f4f6; color: #111827; }
-        .nav-item.active { background: #f0fdf4; color: #15803d; font-weight: 700; }
-        .filtre-btn { padding: 7px 14px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: #fff; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; transition: all 0.15s; font-family: inherit; }
-        .filtre-btn:hover { border-color: #15803d; color: #15803d; }
-        .filtre-btn.active { background: #15803d; color: #fff; border-color: #15803d; }
-        .product-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; transition: all 0.2s; }
-        .product-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
-        .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
-        .icon-btn:hover { border-color: #15803d; background: #f0fdf4; }
-        .icon-btn.danger:hover { border-color: #dc2626; background: #fef2f2; }
-        .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; display: inline-block; }
-        .badge-bon { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-        .badge-eleve { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
-        .badge-actif { background: #f0fdf4; color: #15803d; }
-        .badge-vendu { background: #eff6ff; color: #1d4ed8; }
-        .badge-expire { background: #fef2f2; color: #dc2626; }
-        .topbar-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; transition: all 0.15s; }
-        .topbar-btn:hover { border-color: #15803d; background: #f0fdf4; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: center; justify-content: center; }
-
-        .hamburger-btn { display: none; }
-        .sidebar-overlay { display: none; }
-
-        @media (max-width: 900px) {
-          .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none; }
-          .sidebar.sidebar-open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.12); }
-          .content-wrap { margin-left: 0 !important; }
-          .hamburger-btn { display: flex !important; }
-          .sidebar-overlay.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; }
-          .topbar-search { display: none !important; }
-          .publish-btn-label { display: none !important; }
-          .profile-text { display: none !important; }
-          .page-main { padding: 16px !important; }
-          .topbar-inner { padding: 0 12px !important; }
-          .page-header { flex-wrap: wrap !important; gap: 12px !important; }
-
-          .quick-stats-grid { grid-template-columns: repeat(2,1fr) !important; }
-          .products-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
-
+    <>
       {/* MODAL SUPPRESSION */}
       {deleteId && (
         <div className="overlay" onClick={() => setDeleteId(null)}>
@@ -188,102 +206,40 @@ export default function MesProduits() {
         </div>
       )}
 
-      {/* Overlay mobile */}
-      <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+      <style>{`
+        .filtre-btn { padding: 7px 14px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: #fff; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+        .filtre-btn:hover { border-color: #15803d; color: #15803d; }
+        .filtre-btn.active { background: #15803d; color: #fff; border-color: #15803d; }
+        .product-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; transition: all 0.2s; }
+        .product-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
+        .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
+        .icon-btn:hover { border-color: #15803d; background: #f0fdf4; }
+        .icon-btn.danger:hover { border-color: #dc2626; background: #fef2f2; }
+        .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; display: inline-block; }
+        .badge-bon { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .badge-eleve { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+        .badge-actif { background: #f0fdf4; color: #15803d; }
+        .badge-vendu { background: #eff6ff; color: #1d4ed8; }
+        .badge-expire { background: #fef2f2; color: #dc2626; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: center; justify-content: center; }
 
-      {/* SIDEBAR */}
-      <aside className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 34, height: 34, background: "#15803d", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-            </div>
-            <span style={{ fontWeight: 900, fontSize: 16 }}>
-              <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
-            </span>
-          </a>
-          <button onClick={() => setSidebarOpen(false)} className="topbar-btn" style={{ display: sidebarOpen ? "flex" : "none" }} aria-label="Fermer le menu">
-            <Icon name="close" size={15} color="#111827" />
-          </button>
-        </div>
-        <nav style={{ flex: 1, padding: "12px" }}>
-          {NAV_ITEMS.map(item => (
-            <a key={item.label} href={item.href} className={`nav-item${item.label === "Mes Produits" ? " active" : ""}`}>
-              <Icon name={item.icon} size={17} color={item.label === "Mes Produits" ? "#15803d" : "#6b7280"} />
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {item.badge && (
-                <span style={{ background: "#e5e7eb", color: "#374151", fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 20 }}>
-                  {item.badge}
-                </span>
-              )}
-            </a>
-          ))}
-        </nav>
-        <div style={{ margin: "12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 14, padding: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Icon name="shield" size={16} color="#15803d" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>Trust Score</span>
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#111827", marginBottom: 2 }}>{trustScore}<span style={{ fontSize: 14, color: "#9ca3af", fontWeight: 500 }}>/100</span></div>
-          <p style={{ fontSize: 12, color: "#15803d", fontWeight: 700, marginBottom: 8 }}>Excellent</p>
-          <div style={{ height: 6, background: "#dcfce7", borderRadius: 3 }}>
-            <div style={{ height: "100%", width: `${trustScore}%`, background: "#15803d", borderRadius: 3 }} />
-          </div>
-        </div>
-        <div style={{ padding: "12px 20px 20px", borderTop: "1px solid #f3f4f6" }}>
-          <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Besoin d aide ?</p>
-          <button style={{ background: "transparent", border: "none", color: "#15803d", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>Contacter le support</button>
-        </div>
-      </aside>
+        @media (max-width: 900px) {
+          .page-header { flex-wrap: wrap !important; gap: 12px !important; }
+          .quick-stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .products-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
 
-      {/* MAIN */}
-      <div className="content-wrap" style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
-
-        {/* TOPBAR */}
-        <header className="topbar-inner" style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
-
-          {/* Hamburger (mobile uniquement) */}
-          <button className="hamburger-btn topbar-btn" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-          </button>
-
-          <div className="topbar-search" style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 14px", gap: 8 }}>
-            <Icon name="search" size={15} color="#9ca3af" />
-            <input
-              placeholder="Rechercher un produit..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#111827", padding: "9px 0", fontFamily: "inherit" }}
-            />
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            <button style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-              onClick={() => router.push("/vendre")}>
-              <Icon name="plus" size={15} color="#fff" />
-              <span className="publish-btn-label">Publier une annonce</span>
-            </button>
-            <div className="topbar-btn">
-              <Icon name="bell" size={17} color="#6b7280" />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", background: "#fff" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                {initiales}
-              </div>
-              <div className="profile-text">
-                <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>{prenom}</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ fontSize: 11, color: "#6b7280" }}>Vendeur verifie</span>
-                  <Icon name="check" size={11} color="#15803d" />
-                </div>
-              </div>
-            </div>
-            <button className="topbar-btn" onClick={async () => { await supabase.auth.signOut(); router.replace("/auth"); }} title="Se deconnecter">
-              <Icon name="logout" size={16} color="#6b7280" />
-            </button>
-          </div>
-        </header>
-
-        <main className="page-main" style={{ flex: 1, padding: "28px" }}>
+      {/* Barre de recherche */}
+      <div style={{ display: "flex", alignItems: "center", background: "#fff", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: "0 14px", gap: 8, marginBottom: 20 }}>
+        <Icon name="search" size={15} color="#9ca3af" />
+        <input
+          placeholder="Rechercher un produit..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#111827", padding: "11px 0", fontFamily: "inherit" }}
+        />
+      </div>
 
           {/* HEADER */}
           <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
@@ -384,9 +340,9 @@ export default function MesProduits() {
 
                       {/* Prix */}
                       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-                        <span style={{ fontSize: 20, fontWeight: 900, color: "#15803d" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
+                        <span style={{ fontSize: 20, fontWeight: 900, color: "#15803d" }}>{formatPrix(a.prix_vente)} GHS</span>
                         {a.prix_achat && (
-                          <span style={{ fontSize: 13, color: "#9ca3af", textDecoration: "line-through" }}>{a.prix_achat.toLocaleString()} GHS</span>
+                        <span style={{ fontSize: 13, color: "#9ca3af", textDecoration: "line-through" }}>{formatPrix(a.prix_achat)} GHS</span>
                         )}
                       </div>
 
@@ -406,6 +362,25 @@ export default function MesProduits() {
                           </span>
                         )}
                       </div>
+
+                                          {analyses[a.id] && (
+                        <div style={{
+                          marginBottom: 14,
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          fontSize: 12,
+                          lineHeight: 1.5,
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "flex-start",
+                          background: analyses[a.id].type === "prix" ? "#fffbeb" : analyses[a.id].type === "visibilite" ? "#eff6ff" : "#f9fafb",
+                          border: `1px solid ${analyses[a.id].type === "prix" ? "#fde68a" : analyses[a.id].type === "visibilite" ? "#bfdbfe" : "#e5e7eb"}`,
+                          color: analyses[a.id].type === "prix" ? "#92400e" : analyses[a.id].type === "visibilite" ? "#1d4ed8" : "#4b5563",
+                        }}>
+                          <Icon name={analyses[a.id].type === "prix" ? "tag" : analyses[a.id].type === "visibilite" ? "eye" : "star"} size={14} color="currentColor" />
+                          <span>{analyses[a.id].message}</span>
+                        </div>
+                      )}
 
                       {/* Actions */}
                       <div style={{ display: "flex", gap: 8 }}>
@@ -428,8 +403,7 @@ export default function MesProduits() {
               })}
             </div>
           )}
-        </main>
-      </div>
-    </div>
+                  
+    </>
   );
 }

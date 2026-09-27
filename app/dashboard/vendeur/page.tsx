@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import { formatPrix } from "@/lib/format";
 
 type Annonce = {
   id: string;
@@ -54,14 +55,13 @@ function Icon({ name, size = 18, color = "currentColor" }: { name: string; size?
 }
 
 const NAV_ITEMS = [
-  { label: "Dashboard", icon: "grid" },
-  { label: "Mes Produits", icon: "box" },
-  { label: "Commandes", icon: "shopping", badge: 0 },
-  { label: "Messages", icon: "message", badge: 0 },
-  { label: "Analytics", icon: "chart" },
-  { label: "Wallet", icon: "wallet" },
-  { label: "Avis Clients", icon: "star" },
-  { label: "Parametres", icon: "settings" },
+  { label: "Dashboard", icon: "grid", href: "/dashboard/vendeur" },
+  { label: "Mes Produits", icon: "box", href: "/dashboard/vendeur/produits" },
+  { label: "Commandes", icon: "shopping", badge: 0, href: "/dashboard/vendeur/commandes" },
+  { label: "Messages", icon: "message", badge: 0, href: "/dashboard/vendeur/messages" },
+  { label: "Wallet", icon: "wallet", href: "/dashboard/vendeur/wallet" },
+  { label: "Avis Clients", icon: "star", href: "/dashboard/vendeur/avis" },
+  { label: "Parametres", icon: "settings", href: "/dashboard/vendeur/parametres" },
 ];
 
 // Génère les 30 derniers jours
@@ -75,6 +75,30 @@ function getLast30Days(): string[] {
   return days;
 }
 
+function getDailyBuckets(nbJours: number) {
+  const buckets: { start: Date; end: Date; date: Date }[] = [];
+  for (let i = nbJours - 1; i >= 0; i--) {
+    const jour = new Date();
+    jour.setHours(0, 0, 0, 0);
+    jour.setDate(jour.getDate() - i);
+    const fin = new Date(jour);
+    fin.setDate(fin.getDate() + 1);
+    buckets.push({ start: jour, end: fin, date: jour });
+  }
+  return buckets;
+}
+
+function getMonthlyBuckets() {
+  const buckets: { start: Date; end: Date; date: Date }[] = [];
+  const maintenant = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const debut = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1);
+    const fin = new Date(maintenant.getFullYear(), maintenant.getMonth() - i + 1, 1);
+    buckets.push({ start: debut, end: fin, date: debut });
+  }
+  return buckets;
+}
+
 export default function DashboardVendeur() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -85,7 +109,7 @@ export default function DashboardVendeur() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
   const [rechercheActive, setRechercheActive] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [periode, setPeriode] = useState<"semaine" | "mois" | "annee">("mois");
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -100,15 +124,15 @@ export default function DashboardVendeur() {
         .order("created_at", { ascending: false });
       if (annoncesData) setAnnonces(annoncesData);
 
-      // Charger commandes des 30 derniers jours
-      const il_y_a_30_jours = new Date();
-      il_y_a_30_jours.setDate(il_y_a_30_jours.getDate() - 30);
+          // Charger commandes de la dernière année (couvre les 3 vues : semaine/mois/année)
+      const il_y_a_1_an = new Date();
+      il_y_a_1_an.setDate(il_y_a_1_an.getDate() - 366);
 
       const { data: commandesData } = await supabase
         .from("commandes")
         .select("created_at, statut")
         .eq("vendeur_id", session.user.id)
-        .gte("created_at", il_y_a_30_jours.toISOString());
+        .gte("created_at", il_y_a_1_an.toISOString());
       if (commandesData) setCommandes(commandesData);
 
       setLoading(false);
@@ -122,25 +146,36 @@ export default function DashboardVendeur() {
 
   // ── DONNÉES GRAPHIQUE ────────────────────────────────────────
   const donneesGraphique = useMemo(() => {
-    const jours = getLast30Days();
+    const buckets = periode === "semaine" ? getDailyBuckets(7) : periode === "annee" ? getMonthlyBuckets() : getDailyBuckets(30);
 
-    return jours.map(jour => {
-      const commandesJour = commandes.filter(c =>
-        c.created_at.split("T")[0] === jour && c.statut === "confirmee"
-      ).length;
+    return buckets.map(b => {
+      const dans = commandes.filter(c => {
+        const t = new Date(c.created_at).getTime();
+        return t >= b.start.getTime() && t < b.end.getTime();
+      });
+      const label = periode === "annee"
+        ? b.date.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" })
+        : periode === "semaine"
+        ? b.date.toLocaleDateString("fr-FR", { weekday: "short" })
+        : b.date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 
-      const ventesJour = commandes.filter(c =>
-        c.created_at.split("T")[0] === jour && c.statut === "terminee"
-      ).length;
-
-      return { jour, commandes: commandesJour, ventes: ventesJour };
+      return {
+        label,
+        commandes: dans.length,
+        enAttente: dans.filter(c => c.statut === "en_attente").length,
+        ventes: dans.filter(c => c.statut === "terminee").length,
+        annulees: dans.filter(c => c.statut === "annulee").length,
+      };
     });
-  }, [commandes]);
+  }, [commandes, periode]);
 
   const maxVal = useMemo(() => {
-    const max = Math.max(...donneesGraphique.map(d => Math.max(d.commandes, d.ventes)), 1);
-    return max;
+    return Math.max(...donneesGraphique.flatMap(d => [d.commandes, d.enAttente, d.ventes, d.annulees]), 1);
   }, [donneesGraphique]);
+
+  const labelsAffiches = donneesGraphique.filter((_, i) =>
+    periode === "mois" ? (i % 5 === 0 || i === donneesGraphique.length - 1) : true
+  );
 
   // ── RECHERCHE ────────────────────────────────────────────────
   const annoncesFiltrees = useMemo(() => {
@@ -182,16 +217,9 @@ export default function DashboardVendeur() {
   const totalRevenu = annonces.reduce((s, a) => s + (a.prix_vente || 0), 0);
   const trustScore = 96;
 
-  const totalCommandes = commandes.filter(c => c.statut === "confirmee" || c.statut === "terminee").length;
-  const totalVentes = commandes.filter(c => c.statut === "terminee").length;
-
-  // Labels des 30 jours — afficher seulement 6 labels
-  const labelsJours = donneesGraphique
-    .filter((_, i) => i % 5 === 0 || i === 29)
-    .map(d => {
-      const date = new Date(d.jour);
-      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-    });
+  const commandes30j = commandes.filter(c => Date.now() - new Date(c.created_at).getTime() <= 30 * 24 * 60 * 60 * 1000);
+  const totalCommandes = commandes30j.length;
+  const totalVentes = commandes30j.filter(c => c.statut === "terminee").length;
 
   const W = 580;
   const H = 140;
@@ -199,76 +227,21 @@ export default function DashboardVendeur() {
   const paddingRight = 10;
   const graphW = W - paddingLeft - paddingRight;
 
-  function pointsLigne(cle: "commandes" | "ventes") {
-    return donneesGraphique.map((d, i) => {
-      const x = paddingLeft + (i / (donneesGraphique.length - 1)) * graphW;
-      const y = H - (maxVal > 0 ? (d[cle] / maxVal) * (H - 10) : 0);
-      return `${x},${y}`;
-    }).join(" ");
-  }
-
-  function aireRemplie(cle: "commandes" | "ventes") {
-    const pts = donneesGraphique.map((d, i) => {
-      const x = paddingLeft + (i / (donneesGraphique.length - 1)) * graphW;
-      const y = H - (maxVal > 0 ? (d[cle] / maxVal) * (H - 10) : 0);
-      return `${x},${y}`;
-    });
-    return `M ${pts[0]} L ${pts.join(" L ")} L ${paddingLeft + graphW},${H} L ${paddingLeft},${H} Z`;
-  }
-
   const aucuneDonnee = commandes.length === 0;
 
-  return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f9fafb", fontFamily: "Inter, system-ui, sans-serif", color: "#111827" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        a { text-decoration: none; color: inherit; }
-        .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 500; color: #6b7280; }
-        .nav-item:hover { background: #f3f4f6; color: #111827; }
-        .nav-item.active { background: #f0fdf4; color: #15803d; font-weight: 700; }
-        .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px 24px; display: flex; align-items: center; gap: 16px; }
-        .product-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; transition: all 0.2s; }
-        .product-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
-        .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
-        .icon-btn:hover { border-color: #15803d; background: #f0fdf4; }
-        .icon-btn.danger:hover { border-color: #dc2626; background: #fef2f2; }
-        .topbar-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; }
-        .topbar-btn:hover { border-color: #15803d; background: #f0fdf4; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: center; justify-content: center; }
-        .action-btn { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: 12px; background: #f9fafb; border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 600; color: #374151; width: 100%; font-family: inherit; }
-        .action-btn:hover { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
-        .search-result-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f3f4f6; transition: background 0.1s; }
-        .search-result-item:hover { background: #f9fafb; }
-        .search-result-item:last-child { border-bottom: none; }
+  // Largeur d'une "colonne" du graphique et seuil au-dessus duquel on affiche les valeurs chiffrées
+  // (en vue "Mois", 30 colonnes sont trop serrées pour des labels lisibles)
+  const dayWidth = graphW / (donneesGraphique.length || 1);
+  const afficherValeurs = dayWidth > 24;
+  const BAR_MAX_H = H - 22; // on réserve de la place en haut pour les labels et la ligne de moyenne
 
-        .hamburger-btn { display: none; }
-        .sidebar-overlay { display: none; }
+  const moyenneCommandes = donneesGraphique.length > 0
+    ? donneesGraphique.reduce((s, d) => s + d.commandes, 0) / donneesGraphique.length
+    : 0;
+  const uniteMoyenne = periode === "annee" ? "mois" : "jour";
 
-        @media (max-width: 900px) {
-          .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none; }
-          .sidebar.sidebar-open { transform: translateX(0); box-shadow: 12px 0 32px rgba(0,0,0,0.12); }
-          .content-wrap { margin-left: 0 !important; }
-          .hamburger-btn { display: flex !important; }
-          .sidebar-overlay.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; }
-          .topbar-search { display: none !important; }
-          .publish-btn-label { display: none !important; }
-          .profile-text { display: none !important; }
-          .page-main { padding: 16px !important; }
-          .topbar-inner { padding: 0 12px !important; }
-
-          .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
-          .dash-grid { grid-template-columns: 1fr !important; }
-          .products-grid { grid-template-columns: 1fr !important; }
-
-          .table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-          .mini-row { min-width: 560px !important; }
-
-          .search-result-item { flex-wrap: wrap !important; }
-          .search-result-price { width: 100% !important; margin-top: 6px !important; }
-        }
-      `}</style>
-
+    return (
+    <>
       {/* MODAL SUPPRESSION */}
       {deleteId && (
         <div className="overlay" onClick={() => setDeleteId(null)}>
@@ -286,128 +259,46 @@ export default function DashboardVendeur() {
         </div>
       )}
 
-      {/* Overlay mobile */}
-      <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+      <style>{`
+        .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px 24px; display: flex; align-items: center; gap: 16px; }
+        .product-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; transition: all 0.2s; }
+        .product-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
+        .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
+        .icon-btn:hover { border-color: #15803d; background: #f0fdf4; }
+        .icon-btn.danger:hover { border-color: #dc2626; background: #fef2f2; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: center; justify-content: center; }
+        .action-btn { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: 12px; background: #f9fafb; border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 600; color: #374151; width: 100%; font-family: inherit; }
+        .action-btn:hover { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .search-result-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f3f4f6; transition: background 0.1s; }
+        .search-result-item:hover { background: #f9fafb; }
+        .search-result-item:last-child { border-bottom: none; }
 
-      {/* SIDEBAR */}
-      <aside className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{ width: 230, background: "#fff", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100, overflowY: "auto" }}>
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <a href="/" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 34, height: 34, background: "#15803d", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-            </div>
-            <span style={{ fontWeight: 900, fontSize: 16 }}>
-              <span style={{ color: "#15803d" }}>Student</span><span style={{ color: "#111827" }}>Market</span>
-            </span>
-          </a>
-          <button onClick={() => setSidebarOpen(false)} className="topbar-btn" style={{ display: sidebarOpen ? "flex" : "none" }} aria-label="Fermer le menu">
-            <Icon name="close" size={15} color="#111827" />
+        @media (max-width: 900px) {
+          .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .dash-grid { grid-template-columns: 1fr !important; }
+          .products-grid { grid-template-columns: 1fr !important; }
+          .table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+          .mini-row { min-width: 560px !important; }
+          .search-result-item { flex-wrap: wrap !important; }
+          .search-result-price { width: 100% !important; margin-top: 6px !important; }
+        }
+      `}</style>
+
+      {/* Barre de recherche du dashboard */}
+      <div style={{ display: "flex", alignItems: "center", background: "#fff", border: `1.5px solid ${rechercheActive ? "#15803d" : "#e5e7eb"}`, borderRadius: 10, padding: "0 14px", gap: 8, marginBottom: 20, transition: "border-color 0.2s" }}>
+        <Icon name="search" size={15} color={rechercheActive ? "#15803d" : "#9ca3af"} />
+        <input
+          value={recherche}
+          onChange={handleRechercheChange}
+          placeholder="Rechercher un produit, une categorie, une ville..."
+          style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#111827", padding: "11px 0", fontFamily: "inherit" }}
+        />
+        {rechercheActive && (
+          <button onClick={clearRecherche} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}>
+            <Icon name="close" size={14} color="#9ca3af" />
           </button>
-        </div>
-
-        <nav style={{ flex: 1, padding: "12px" }}>
-          {NAV_ITEMS.map(item => (
-            <div key={item.label}
-              className={`nav-item${activeNav === item.label && !rechercheActive ? " active" : ""}`}
-              onClick={() => {
-                if (item.label === "Analytics") {
-                router.push("/dashboard/vendeur/analytics");
-                } else {
-                  setActiveNav(item.label);
-                  clearRecherche();
-                  }
-                setSidebarOpen(false);
-              }}
-            >
-              <Icon name={item.icon} size={17} color={activeNav === item.label && !rechercheActive ? "#15803d" : "#6b7280"} />
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {item.badge ? (
-                <span style={{ background: activeNav === item.label ? "#15803d" : "#e5e7eb", color: activeNav === item.label ? "#fff" : "#374151", fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 20 }}>
-                  {item.badge}
-                </span>
-              ) : null}
-            </div>
-          ))}
-        </nav>
-
-        <div style={{ margin: "12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 14, padding: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Icon name="shield" size={16} color="#15803d" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>Trust Score</span>
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#111827", marginBottom: 2 }}>{trustScore}<span style={{ fontSize: 14, color: "#9ca3af", fontWeight: 500 }}>/100</span></div>
-          <p style={{ fontSize: 12, color: "#15803d", fontWeight: 700, marginBottom: 8 }}>Excellent</p>
-          <div style={{ height: 6, background: "#dcfce7", borderRadius: 3 }}>
-            <div style={{ height: "100%", width: `${trustScore}%`, background: "#15803d", borderRadius: 3 }} />
-          </div>
-        </div>
-
-        <div style={{ margin: "0 12px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 14, padding: "16px" }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 4 }}>Booster vos ventes</p>
-          <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5, marginBottom: 12 }}>Mettez en avant vos annonces.</p>
-          <button style={{ width: "100%", background: "#15803d", color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            Créer une promotion
-          </button>
-        </div>
-
-        <div style={{ padding: "12px 20px 20px", borderTop: "1px solid #f3f4f6" }}>
-          <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 4 }}>Besoin d'aide ?</p>
-          <button style={{ background: "transparent", border: "none", color: "#15803d", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
-            Contacter le support
-          </button>
-        </div>
-      </aside>
-
-      {/* MAIN */}
-      <div className="content-wrap" style={{ marginLeft: 230, flex: 1, display: "flex", flexDirection: "column" }}>
-
-        {/* TOPBAR */}
-        <header className="topbar-inner" style={{ height: 60, background: "#fff", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", padding: "0 28px", gap: 16, position: "sticky", top: 0, zIndex: 50 }}>
-
-          {/* Hamburger (mobile uniquement) */}
-          <button className="hamburger-btn topbar-btn" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-          </button>
-
-          <div className="topbar-search" style={{ flex: 1, maxWidth: 480, display: "flex", alignItems: "center", background: "#f9fafb", border: `1.5px solid ${rechercheActive ? "#15803d" : "#e5e7eb"}`, borderRadius: 10, padding: "0 14px", gap: 8, transition: "border-color 0.2s" }}>
-            <Icon name="search" size={15} color={rechercheActive ? "#15803d" : "#9ca3af"} />
-            <input
-              value={recherche}
-              onChange={handleRechercheChange}
-              placeholder="Rechercher un produit, une categorie, une ville..."
-              style={{ flex: 1, border: "none", outline: "none", fontSize: 14, background: "transparent", color: "#111827", padding: "9px 0", fontFamily: "inherit" }}
-            />
-            {rechercheActive && (
-              <button onClick={clearRecherche} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}>
-                <Icon name="close" size={14} color="#9ca3af" />
-              </button>
-            )}
-          </div>
-
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            <button style={{ display: "flex", alignItems: "center", gap: 6, background: "#15803d", color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-              onClick={() => router.push("/vendre")}>
-              <Icon name="plus" size={15} color="#fff" />
-              <span className="publish-btn-label">Publier une annonce</span>
-            </button>
-            <div className="topbar-btn"><Icon name="bell" size={17} color="#6b7280" /></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", background: "#fff" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{initiales}</div>
-              <div className="profile-text">
-                <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1.2 }}>{prenom}</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ fontSize: 11, color: "#6b7280" }}>Vendeur verifie</span>
-                  <Icon name="check" size={11} color="#15803d" />
-                </div>
-              </div>
-            </div>
-            <button className="topbar-btn" onClick={async () => { await supabase.auth.signOut(); router.replace("/auth"); }}>
-              <Icon name="logout" size={16} color="#6b7280" />
-            </button>
-          </div>
-        </header>
-
-        <main className="page-main" style={{ flex: 1, padding: "28px" }}>
+        )}
+      </div>
 
           {/* ── RÉSULTATS RECHERCHE ── */}
           {rechercheActive && (
@@ -443,7 +334,7 @@ export default function DashboardVendeur() {
                           <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
                           <p style={{ fontSize: 12, color: "#9ca3af" }}>{a.categorie} · {a.ville} · {a.etat}</p>
                         </div>
-                        <p className="search-result-price" style={{ fontSize: 15, fontWeight: 800, color: "#15803d" }}>{(a.prix_vente || 0).toLocaleString()} GHS</p>
+                        <p className="search-result-price" style={{ fontSize: 15, fontWeight: 800, color: "#15803d" }}>{formatPrix(a.prix_vente)} GHS</p>
                         <button className="icon-btn danger" onClick={() => setDeleteId(a.id)} style={{ marginLeft: 12 }}>
                           <Icon name="trash" size={14} color="#dc2626" />
                         </button>
@@ -490,7 +381,7 @@ export default function DashboardVendeur() {
                           <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>{a.categorie} · {a.ville}</p>
                           <p style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 8 }}>{a.titre}</p>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-                            <span style={{ fontSize: 20, fontWeight: 900, color: "#15803d" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
+                            <span style={{ fontSize: 20, fontWeight: 900, color: "#15803d" }}>{formatPrix(a.prix_vente)} GHS</span>
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151", fontFamily: "inherit" }} onClick={() => router.push("/annonces")}>Voir</button>
@@ -549,7 +440,7 @@ export default function DashboardVendeur() {
               {/* STATS */}
               <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
-                  { label: "Revenus totaux", value: `${totalRevenu.toLocaleString()} GHS`, sub: `${annonces.length} annonces au total`, icon: "wallet", color: "#15803d", bg: "#f0fdf4" },
+                  { label: "Revenus totaux", value: `${formatPrix(totalRevenu)} GHS`, sub: `${annonces.length} annonces au total`, icon: "wallet", color: "#15803d", bg: "#f0fdf4" },
                   { label: "Produits actifs", value: String(annonces.filter(a => !a.statut || a.statut === "actif").length), sub: `sur ${annonces.length} annonces`, icon: "box", color: "#7c3aed", bg: "#faf5ff" },
                   { label: "Commandes reçues", value: String(totalCommandes), sub: `${totalVentes} vente${totalVentes > 1 ? "s" : ""} finalisée${totalVentes > 1 ? "s" : ""}`, icon: "shopping", color: "#0e7490", bg: "#ecfeff" },
                   { label: "Trust Score", value: `${trustScore}/100`, sub: "Excellent", icon: "star", color: "#d97706", bg: "#fffbeb" },
@@ -571,66 +462,117 @@ export default function DashboardVendeur() {
               <div className="dash-grid" style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 16, marginBottom: 24 }}>
 
                 {/* GRAPHIQUE RÉEL */}
-                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                             <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
                     <div>
-                      <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>Activité sur 30 jours</h2>
+                      <h2 style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>
+                        Activité {periode === "semaine" ? "sur 7 jours" : periode === "annee" ? "sur 12 mois" : "sur 30 jours"}
+                      </h2>
                       <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-                        {totalCommandes} commande{totalCommandes > 1 ? "s" : ""} · {totalVentes} vente{totalVentes > 1 ? "s" : ""} finalisée{totalVentes > 1 ? "s" : ""}
+                        {totalCommandes} commande{totalCommandes > 1 ? "s" : ""} · {totalVentes} vente{totalVentes > 1 ? "s" : ""} finalisée{totalVentes > 1 ? "s" : ""} (30 derniers jours)
                       </p>
                     </div>
-                    {/* Légende */}
-                    <div style={{ display: "flex", gap: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <div style={{ width: 10, height: 3, background: "#15803d", borderRadius: 2 }} />
-                        <span style={{ fontSize: 11, color: "#6b7280" }}>Commandes</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <div style={{ width: 10, height: 3, background: "#7c3aed", borderRadius: 2 }} />
-                        <span style={{ fontSize: 11, color: "#6b7280" }}>Ventes</span>
-                      </div>
+                    <div style={{ display: "flex", gap: 6, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 9, padding: 3 }}>
+                      {([["semaine", "Semaine"], ["mois", "Mois"], ["annee", "Année"]] as const).map(([val, label]) => (
+                        <button key={val} onClick={() => setPeriode(val)} style={{ padding: "5px 12px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: periode === val ? "#15803d" : "transparent", color: periode === val ? "#fff" : "#6b7280" }}>
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
+                    {[
+                      { label: "Commandes", color: "#15803d" },
+                      { label: "En attente", color: "#d97706" },
+                      { label: "Ventes", color: "#7c3aed" },
+                      { label: "Annulées", color: "#9ca3af" },
+                    ].map(l => (
+                      <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div style={{ width: 10, height: 10, background: l.color, borderRadius: 2 }} />
+                        <span style={{ fontSize: 11, color: "#6b7280" }}>{l.label}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 14, height: 0, borderTop: "2px dashed #111827" }} />
+                      <span style={{ fontSize: 11, color: "#6b7280" }}>Moyenne</span>
+                    </div>
+                  </div>
+
+                  {!aucuneDonnee && (
+                    <p style={{ fontSize: 12, color: "#111827", fontWeight: 700, marginBottom: 10 }}>
+                      Moyenne : {moyenneCommandes.toFixed(1)} commande{moyenneCommandes >= 2 ? "s" : ""} / {uniteMoyenne}
+                    </p>
+                  )}
+
                   {aucuneDonnee ? (
                     <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f9fafb", borderRadius: 10, border: "1px dashed #e5e7eb" }}>
-                      <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 4 }}>Aucune activité sur 30 jours</p>
-                      <p style={{ fontSize: 11, color: "#d1d5db" }}>Le graphique apparaîtra à la première commande confirmée</p>
+                      <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 4 }}>Aucune activité sur cette période</p>
+                      <p style={{ fontSize: 11, color: "#d1d5db" }}>Le graphique apparaîtra à la première commande reçue</p>
                     </div>
                   ) : (
                     <>
                       <svg width="100%" height="160" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-                        <defs>
-                          <linearGradient id="gradCommandes" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#15803d" stopOpacity="0.15"/>
-                            <stop offset="100%" stopColor="#15803d" stopOpacity="0"/>
-                          </linearGradient>
-                          <linearGradient id="gradVentes" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.1"/>
-                            <stop offset="100%" stopColor="#7c3aed" stopOpacity="0"/>
-                          </linearGradient>
-                        </defs>
                         {[0,1,2,3].map(i => <line key={i} x1="0" y1={i*(H/3)} x2={W} y2={i*(H/3)} stroke="#f3f4f6" strokeWidth="1"/>)}
-                        {/* Aire commandes */}
-                        <path d={aireRemplie("commandes")} fill="url(#gradCommandes)" />
-                        {/* Ligne commandes */}
-                        <polyline points={pointsLigne("commandes")} fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        {/* Aire ventes */}
-                        <path d={aireRemplie("ventes")} fill="url(#gradVentes)" />
-                        {/* Ligne ventes */}
-                        <polyline points={pointsLigne("ventes")} fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 2"/>
-                        {/* Points commandes */}
-                        {donneesGraphique.map((d, i) => d.commandes > 0 && (
-                          <circle key={`c${i}`} cx={paddingLeft + (i/(donneesGraphique.length-1))*graphW} cy={H-(maxVal>0?(d.commandes/maxVal)*(H-10):0)} r="4" fill="#fff" stroke="#15803d" strokeWidth="2.5"/>
-                        ))}
-                        {/* Points ventes */}
-                        {donneesGraphique.map((d, i) => d.ventes > 0 && (
-                          <circle key={`v${i}`} cx={paddingLeft + (i/(donneesGraphique.length-1))*graphW} cy={H-(maxVal>0?(d.ventes/maxVal)*(H-10):0)} r="4" fill="#fff" stroke="#7c3aed" strokeWidth="2"/>
-                        ))}
+                        {donneesGraphique.map((d, i) => {
+                          const gap = 1.5;
+                          const barWidth = (dayWidth * 0.82 - gap * 3) / 4;
+                          const xBase = paddingLeft + i * dayWidth + dayWidth * 0.09;
+                          const valeurs = [
+                            { val: d.commandes, color: "#15803d" },
+                            { val: d.enAttente, color: "#d97706" },
+                            { val: d.ventes, color: "#7c3aed" },
+                            { val: d.annulees, color: "#9ca3af" },
+                          ];
+                          return (
+                            <g key={i}>
+                              {valeurs.map((v, idx) => {
+                                const h = maxVal > 0 ? (v.val / maxVal) * BAR_MAX_H : 0;
+                                const x = xBase + idx * (barWidth + gap);
+                                return <rect key={idx} x={x} y={H - h} width={barWidth} height={h} fill={v.color} rx="1" />;
+                              })}
+                              {afficherValeurs && d.commandes > 0 && (
+                                <text
+                                  x={xBase + barWidth / 2}
+                                  y={H - (maxVal > 0 ? (d.commandes / maxVal) * BAR_MAX_H : 0) - 4}
+                                  textAnchor="middle"
+                                  fontSize="8"
+                                  fontWeight="700"
+                                  fill="#15803d"
+                                >
+                                  {d.commandes}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        })}
+                        {maxVal > 0 && (
+                          <>
+                            <line
+                              x1={paddingLeft}
+                              y1={H - (moyenneCommandes / maxVal) * BAR_MAX_H}
+                              x2={W - paddingRight}
+                              y2={H - (moyenneCommandes / maxVal) * BAR_MAX_H}
+                              stroke="#111827"
+                              strokeWidth="1.2"
+                              strokeDasharray="4 3"
+                            />
+                            <text
+                              x={W - paddingRight}
+                              y={H - (moyenneCommandes / maxVal) * BAR_MAX_H - 4}
+                              textAnchor="end"
+                              fontSize="9"
+                              fontWeight="700"
+                              fill="#111827"
+                            >
+                              Moy. {moyenneCommandes.toFixed(1)}
+                            </text>
+                          </>
+                        )}
                       </svg>
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                        {labelsJours.map((l, i) => (
-                          <span key={i} style={{ fontSize: 10, color: "#9ca3af" }}>{l}</span>
+                        {labelsAffiches.map((d, i) => (
+                          <span key={i} style={{ fontSize: 10, color: "#9ca3af" }}>{d.label}</span>
                         ))}
                       </div>
                     </>
@@ -693,9 +635,9 @@ export default function DashboardVendeur() {
                               <p style={{ fontSize: 11, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
                             </div>
                           </div>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{formatPrix(a.prix_vente)} GHS</span>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 13, color: "#374151" }}>{(a.prix_achat || 0).toLocaleString()} GHS</span>
+                            <span style={{ fontSize: 13, color: "#374151" }}>{formatPrix(a.prix_achat)} GHS</span>
                             <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: a.score_prix === "bon" ? "#f0fdf4" : "#fffbeb", color: a.score_prix === "bon" ? "#15803d" : "#92400e" }}>
                               {a.score_prix === "bon" ? "Bon" : "Elevé"}
                             </span>
@@ -711,8 +653,6 @@ export default function DashboardVendeur() {
               </div>
             </div>
           )}
-        </main>
-      </div>
-    </div>
+          </>
   );
 }

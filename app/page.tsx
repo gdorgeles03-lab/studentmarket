@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { formatPrix } from "../lib/format";
 
 const NAV_CATS = [
   { label: "Smartphones", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor"/></svg>, subs: ["iPhone", "Samsung", "Tecno", "Infinix", "Huawei", "Xiaomi"] },
@@ -56,13 +57,14 @@ export default function Home() {
       .from("annonces")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(6)
+      .limit(20)
       .then(({ data }) => {
         if (data) {
-          setAnnonces(data);
+          const disponibles = data.filter((a: any) => a.statut !== "vendu").slice(0, 6);
+          setAnnonces(disponibles);
 
           const stats: Record<string, number> = {};
-          (data as any[]).forEach((a: any) => {
+          disponibles.forEach((a: any) => {
             if (a.categorie) {
               stats[a.categorie] = (stats[a.categorie] || 0) + 1;
             }
@@ -76,7 +78,17 @@ export default function Home() {
       window.removeEventListener("scroll", onScroll);
     };
   }, []);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
   async function handleSignOut() {
     await supabase.auth.signOut();
     setUser(null);
@@ -86,6 +98,7 @@ export default function Home() {
 
   const firstName = user?.user_metadata?.name?.split(" ")[0] || "Mon compte";
   const fullName = user?.user_metadata?.name || "";
+  const avatarUrl = user?.user_metadata?.avatar_url || null;
 
   // Route du dashboard determinee dynamiquement selon le role du user
   // (permet d'accueillir plus tard le dashboard acheteur sans revenir ici)
@@ -230,8 +243,12 @@ export default function Home() {
                       onMouseOver={e => e.currentTarget.style.borderColor = "#bbf7d0"}
                       onMouseOut={e => { if (!userMenuOpen) e.currentTarget.style.borderColor = "#e5e7eb"; }}
                     >
-                      <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#15803d", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        )}
                       </div>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#111827" }}>{firstName}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" style={{ transform: userMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><path d="m6 9 6 6 6-6"/></svg>
@@ -500,8 +517,8 @@ export default function Home() {
                     <p style={{ fontSize: "11px", color: "#9ca3af", margin: "0 0 4px" }}>{a.categorie} · {a.ville}</p>
                     <p style={{ fontWeight: 700, color: "#111827", fontSize: "14px", margin: "0 0 8px", lineHeight: 1.3 }}>{a.titre}</p>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <p style={{ fontSize: "18px", fontWeight: 900, color: "#15803d", margin: 0 }}>GHS {a.prix_vente}</p>
-                      <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0, textDecoration: "line-through" }}>GHS {a.prix_achat}</p>
+                      <p style={{ fontSize: "18px", fontWeight: 900, color: "#15803d", margin: 0 }}>GHS {formatPrix(a.prix_vente)}</p>
+                      <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0, textDecoration: "line-through" }}>GHS {formatPrix(a.prix_achat)}</p>
                     </div>
                     <p style={{ fontSize: "11px", color: "#6b7280", margin: "6px 0 0" }}>{a.vendeur_nom} · {a.universite}</p>
                   </div>

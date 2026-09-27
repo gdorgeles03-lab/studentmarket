@@ -20,6 +20,7 @@ type Annonce = {
   universite?: string;
   created_at: string;
   photos?: string[];
+  statut?: string;
 };
 
 const CATEGORIES = ["Tous", "Smartphone", "Laptop", "Casque / Ecouteurs", "Tablette", "Console de jeu"];
@@ -73,7 +74,7 @@ export default function AnnoncesPage() {
         .from("annonces")
         .select("*")
         .order("created_at", { ascending: false });
-      if (!error) setAnnonces((data as Annonce[]) || []);
+      if (!error) setAnnonces(((data as Annonce[]) || []).filter(a => a.statut !== "vendu"));
       setChargement(false);
     }
     chargerAnnonces();
@@ -303,8 +304,12 @@ export default function AnnoncesPage() {
                   {selected.etat} · {selected.duree_utilisation} mois d'utilisation · {selected.ville}
                 </p>
 
-                {/* ── BOUTON COMMANDER ────────────────────────── */}
-                {commandeConfirmee ? (
+                 {/* ── BOUTON COMMANDER ────────────────────────── */}
+                {selected.statut === "vendu" ? (
+                  <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px", marginBottom: 8, textAlign: "center" }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Cet article a déjà été vendu</p>
+                  </div>
+                ) : commandeConfirmee ? (
                   <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "14px", marginBottom: 8, textAlign: "center" }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: "#15803d", marginBottom: 2 }}>Commande envoyée !</p>
                     <p style={{ fontSize: 12, color: "#6b7280" }}>Le vendeur va bientôt confirmer votre demande.</p>

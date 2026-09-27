@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import { formatPrix } from "@/lib/format";
 
 type Annonce = {
   id: string;
@@ -64,14 +65,14 @@ function Icon({ name, size = 18, color = "currentColor" }: { name: string; size?
 }
 
 const NAV_ITEMS = [
-  { label: "Dashboard",    icon: "grid" },
-  { label: "Mes Produits", icon: "box" },
-  { label: "Commandes",    icon: "shopping", badge: 0 },
-  { label: "Messages",     icon: "message",  badge: 0 },
-  { label: "Analytics",   icon: "chart" },
-  { label: "Wallet",      icon: "wallet" },
-  { label: "Avis Clients",icon: "star" },
-  { label: "Parametres",  icon: "settings" },
+  { label: "Dashboard", icon: "grid", href: "/dashboard/vendeur" },
+  { label: "Mes Produits", icon: "box", href: "/dashboard/vendeur/produits" },
+  { label: "Commandes", icon: "shopping", badge: 0, href: "/dashboard/vendeur/commandes" },
+  { label: "Messages", icon: "message", badge: 0, href: "/dashboard/vendeur/messages" },
+  { label: "Analytics", icon: "chart", href: "/dashboard/vendeur/analytics" },
+  { label: "Wallet", icon: "wallet", href: "/dashboard/vendeur/wallet" },
+  { label: "Avis Clients", icon: "star", href: "/dashboard/vendeur/avis" },
+  { label: "Parametres", icon: "settings", href: "/dashboard/vendeur/parametres" },
 ];
 
 type Periode = "7j" | "30j" | "3m" | "12m";
@@ -400,31 +401,21 @@ export default function DashboardVendeur() {
           </button>
         </div>
         <nav style={{ flex: 1, padding: "12px" }}>
-          {NAV_ITEMS.map(item => (
-            <div 
-            key={item.label} 
-            className={`nav-item${activeNav === item.label && !rechercheActive ? " active" : ""}`}
-            onClick={() => { 
-              if (item.label === "Analytics") {
-                setActiveNav("Analytics");
-                clearRecherche();
-              } else if (item.label === "Commandes") {
-                window.location.href = "/dashboard/vendeur/commandes";
-              } else if (item.label === "Messages") {
-                window.location.href = "/dashboard/vendeur/messages";
-              } else {
-                setActiveNav(item.label);
-                clearRecherche();
-                }
-              setSidebarOpen(false);
-              }}>
-              <Icon name={item.icon} size={17} color={activeNav === item.label && !rechercheActive ? "#15803d" : "#6b7280"} />
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {item.label === "Analytics" && (
-                <span style={{ fontSize: 10, fontWeight: 700, background: "#fffbeb", color: "#92400e", padding: "1px 6px", borderRadius: 4, border: "1px solid #fde68a" }}>NEW</span>
-              )}
-            </div>
-          ))}
+                    {NAV_ITEMS.map(item => {
+            const estActif = item.label === "Analytics" && !rechercheActive;
+            return (
+              <a key={item.label} href={item.href}
+                className={`nav-item${estActif ? " active" : ""}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Icon name={item.icon} size={17} color={estActif ? "#15803d" : "#6b7280"} />
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {item.label === "Analytics" && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: "#fffbeb", color: "#92400e", padding: "1px 6px", borderRadius: 4, border: "1px solid #fde68a" }}>NEW</span>
+                )}
+              </a>
+            );
+          })}
         </nav>
         <div style={{ margin: "12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 14, padding: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -523,7 +514,7 @@ export default function DashboardVendeur() {
                           <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{a.titre}</p>
                           <p style={{ fontSize: 12, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
                         </div>
-                        <p style={{ fontSize: 15, fontWeight: 800, color: "#15803d" }}>{(a.prix_vente || 0).toLocaleString()} GHS</p>
+                        <p style={{ fontSize: 15, fontWeight: 800, color: "#15803d" }}>{formatPrix(a.prix_vente)} GHS</p>
                         <button className="icon-btn danger" onClick={() => setDeleteId(a.id)} style={{ marginLeft: 12 }}>
                           <Icon name="trash" size={14} color="#dc2626" />
                         </button>
@@ -606,7 +597,7 @@ export default function DashboardVendeur() {
                 {[
                   { label: "Commandes reçues",  value: String(analyticsData.totalCommandes), sub: "sur la période", icon: "shopping", color: "#15803d",  bg: "#f0fdf4" },
                   { label: "Ventes finalisées", value: String(analyticsData.totalVentes),    sub: "transactions terminées", icon: "check",    color: "#1d4ed8",  bg: "#eff6ff" },
-                  { label: "Revenu estimé",     value: `${analyticsData.revenuPeriode.toLocaleString()} GHS`, sub: "ventes confirmées", icon: "wallet", color: "#7c3aed",  bg: "#faf5ff" },
+                  { label: "Revenu estimé",     value: `${formatPrix(analyticsData.revenuPeriode)} GHS`, sub: "ventes confirmées", icon: "wallet", color: "#7c3aed",  bg: "#faf5ff" },
                   { label: "Taux conversion",   value: `${analyticsData.tauxConversion}%`,  sub: "vues → commandes", icon: "trending",  color: "#d97706",  bg: "#fffbeb" },
                 ].map(s => (
                   <div key={s.label} className="analytics-kpi">
@@ -687,7 +678,7 @@ export default function DashboardVendeur() {
                         <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.titre}</p>
                         <p style={{ fontSize: 11, color: "#9ca3af" }}>{p.count} vente{p.count > 1 ? "s" : ""}</p>
                       </div>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "#15803d", flexShrink: 0 }}>{p.revenu.toLocaleString()} GHS</p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "#15803d", flexShrink: 0 }}>{formatPrix(p.revenu)} GHS</p>
                     </div>
                   ))}
                 </div>
@@ -777,7 +768,7 @@ export default function DashboardVendeur() {
 
               <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
-                  { label: "Revenus totaux",    value: `${totalRevenu.toLocaleString()} GHS`, sub: `${annonces.length} annonces au total`, icon: "wallet",   color: "#15803d", bg: "#f0fdf4" },
+                  { label: "Revenus totaux",    value: `${formatPrix(totalRevenu)} GHS`, sub: `${annonces.length} annonces au total`, icon: "wallet",   color: "#15803d", bg: "#f0fdf4" },
                   { label: "Produits actifs",   value: String(annonces.filter(a => !a.statut || a.statut === "actif").length), sub: `sur ${annonces.length} annonces`, icon: "box", color: "#7c3aed", bg: "#faf5ff" },
                   { label: "Commandes reçues",  value: String(totalCommandes30j), sub: `${totalVentes30j} vente${totalVentes30j > 1 ? "s" : ""} finalisée${totalVentes30j > 1 ? "s" : ""}`, icon: "shopping", color: "#0e7490", bg: "#ecfeff" },
                   { label: "Trust Score",       value: `${trustScore}/100`, sub: "Excellent", icon: "star", color: "#d97706", bg: "#fffbeb" },
@@ -883,9 +874,9 @@ export default function DashboardVendeur() {
                             <p style={{ fontSize: 11, color: "#9ca3af" }}>{a.categorie} · {a.ville}</p>
                           </div>
                         </div>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{(a.prix_vente || 0).toLocaleString()} GHS</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{formatPrix(a.prix_vente)} GHS</span>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 13, color: "#374151" }}>{(a.prix_achat || 0).toLocaleString()} GHS</span>
+                          <span style={{ fontSize: 13, color: "#374151" }}>{formatPrix(a.prix_achat)} GHS</span>
                           <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: a.score_prix === "bon" ? "#f0fdf4" : "#fffbeb", color: a.score_prix === "bon" ? "#15803d" : "#92400e" }}>
                             {a.score_prix === "bon" ? "Bon" : "Élevé"}
                           </span>

@@ -40,6 +40,7 @@ export default function VendrePage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  const [confirmerPrix, setConfirmerPrix] = useState(false);
   const [publication, setPublication] = useState(false);
   const [published, setPublished] = useState(false);
   const [form, setForm] = useState<FormDataType>(initialForm);
@@ -87,6 +88,7 @@ export default function VendrePage() {
   function handleChange(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
+    if (name === "prixVente") setConfirmerPrix(false);
   }
 
   // ── UPLOAD PHOTO DANS SUPABASE STORAGE ────────────────────────
@@ -152,6 +154,12 @@ export default function VendrePage() {
   async function publierAnnonce() {
     if (!scoreResult || !form.titre || !form.categorie || !form.ville || !form.telephone) {
       alert("Veuillez remplir tous les champs obligatoires.");
+      return;
+    }
+
+    const prixHorsSuggestion = Number(form.prixVente) < scoreResult.min || Number(form.prixVente) > scoreResult.max;
+    if (prixHorsSuggestion && !confirmerPrix) {
+      alert("Merci de confirmer que vous souhaitez fixer ce prix, malgré notre estimation.");
       return;
     }
 
@@ -403,6 +411,28 @@ export default function VendrePage() {
                 <input type="number" name="prixVente" value={form.prixVente} onChange={handleChange} placeholder="Ex: 1800" style={{ ...inp, color: "#15803d", fontWeight: 700 }} />
               </div>
             </div>
+
+            {scoreResult && form.prixVente && (Number(form.prixVente) < scoreResult.min || Number(form.prixVente) > scoreResult.max) && (
+              <div style={{ marginTop: "16px", background: "#fffbeb", border: "1.5px solid #fde68a", borderRadius: "12px", padding: "16px" }}>
+                <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <div>
+                    <p style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "4px" }}>
+                      Ce prix s'écarte de notre estimation ({scoreResult.min.toLocaleString()} - {scoreResult.max.toLocaleString()} GHS)
+                    </p>
+                    <p style={{ fontSize: "12px", color: "#92400e", lineHeight: 1.6 }}>
+                      Un prix trop éloigné du marché peut ralentir la vente. Vous pouvez continuer si vous avez une bonne raison (état particulier, accessoires inclus...), mais confirmez-le ci-dessous.
+                    </p>
+                  </div>
+                </div>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer" }}>
+                  <input type="checkbox" checked={confirmerPrix} onChange={e => setConfirmerPrix(e.target.checked)} style={{ marginTop: 2, width: 16, height: 16, accentColor: "#d97706", cursor: "pointer" }} />
+                  <span style={{ fontSize: "13px", color: "#78350f", fontWeight: 600 }}>
+                    Je confirme vouloir fixer ce prix moi-même, en connaissance de l'estimation.
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* SECTION 4 */}
@@ -504,7 +534,7 @@ export default function VendrePage() {
             <button
               className="publish-btn"
               onClick={publierAnnonce}
-              disabled={publication || !form.titre || !form.categorie}
+              disabled={publication || !form.titre || !form.categorie || (!!scoreResult && !!form.prixVente && (Number(form.prixVente) < scoreResult.min || Number(form.prixVente) > scoreResult.max) && !confirmerPrix)}
             >
               {publication ? "Publication en cours..." : (
                 <>
